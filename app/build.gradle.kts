@@ -133,6 +133,7 @@ dependencies {
     implementation(libs.firebase.auth.ktx)
     implementation(libs.firebase.firestore.ktx)
     implementation(libs.firebase.messaging.ktx)
+    implementation(libs.firebase.config.ktx)
     implementation(libs.play.services.auth)
 
     // WorkManager

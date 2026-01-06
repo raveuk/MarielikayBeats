@@ -505,21 +505,6 @@ private fun PairedContent(
             )
         }
     }
-
-    Spacer(modifier = Modifier.height(32.dp))
-
-    // Disconnect button (for parents to unpair)
-    OutlinedButton(
-        onClick = onUnpair,
-        modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = MaterialTheme.colorScheme.error
-        )
-    ) {
-        Icon(Icons.Default.LinkOff, contentDescription = null)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text("Disconnect Device")
-    }
 }
 
 /**

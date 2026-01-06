@@ -12,6 +12,7 @@ import coil3.request.CachePolicy
 import coil3.request.crossfade
 import com.zimbabeats.bridge.ParentalControlBridge
 import com.zimbabeats.cloud.CloudPairingClient
+import com.zimbabeats.cloud.RemoteConfigManager
 import com.zimbabeats.core.data.di.getDataModules
 import com.zimbabeats.core.domain.repository.VideoRepository
 import com.zimbabeats.di.appModule
@@ -55,6 +56,9 @@ class ZimbaBeatsApplication : Application(), SingletonImageLoader.Factory {
             // Initialize Parental Control Bridge (connects to companion app)
             initializeParentalControlBridge()
 
+            // Fetch global content filter settings from Remote Config
+            initializeRemoteConfig()
+
             // Initialize cloud sync if previously paired
             initializeCloudSync()
 
@@ -73,6 +77,18 @@ class ZimbaBeatsApplication : Application(), SingletonImageLoader.Factory {
             android.util.Log.d("ZimbaBeats", "ParentalControlBridge initialized")
         } catch (e: Exception) {
             android.util.Log.e("ZimbaBeats", "Failed to initialize ParentalControlBridge", e)
+        }
+    }
+
+    private fun initializeRemoteConfig() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val remoteConfigManager = RemoteConfigManager()
+                remoteConfigManager.fetchAndActivate()
+                android.util.Log.d("ZimbaBeats", "Remote Config fetched successfully")
+            } catch (e: Exception) {
+                android.util.Log.e("ZimbaBeats", "Failed to fetch Remote Config", e)
+            }
         }
     }
 

@@ -6,7 +6,7 @@ object FilterConfig {
 
     val ageConfigs: Map<AgeGroup, AgeConfig> = mapOf(
         AgeGroup.UNDER_5 to AgeConfig(
-            maxDuration = 600,
+            maxDuration = 600,  // 10 min
             strictMode = true,
             allowedCategories = setOf(
                 VideoCategory.EDUCATION,
@@ -18,8 +18,22 @@ object FilterConfig {
             ),
             maxTitleLength = 100
         ),
+        AgeGroup.UNDER_8 to AgeConfig(
+            maxDuration = 900,  // 15 min
+            strictMode = true,
+            allowedCategories = setOf(
+                VideoCategory.EDUCATION,
+                VideoCategory.ENTERTAINMENT,
+                VideoCategory.ANIMATION,
+                VideoCategory.MUSIC,
+                VideoCategory.KIDS_SONGS,
+                VideoCategory.STORIES,
+                VideoCategory.LEARNING
+            ),
+            maxTitleLength = 120
+        ),
         AgeGroup.UNDER_10 to AgeConfig(
-            maxDuration = 1200,
+            maxDuration = 1200,  // 20 min
             strictMode = true,
             allowedCategories = setOf(
                 VideoCategory.EDUCATION,
@@ -35,7 +49,7 @@ object FilterConfig {
             maxTitleLength = 150
         ),
         AgeGroup.UNDER_12 to AgeConfig(
-            maxDuration = 1800,
+            maxDuration = 1800,  // 30 min
             strictMode = false,
             allowedCategories = setOf(
                 VideoCategory.EDUCATION,
@@ -51,14 +65,31 @@ object FilterConfig {
             ),
             maxTitleLength = 200
         ),
+        AgeGroup.UNDER_13 to AgeConfig(
+            maxDuration = 2100,  // 35 min
+            strictMode = false,
+            allowedCategories = setOf(
+                VideoCategory.EDUCATION,
+                VideoCategory.ENTERTAINMENT,
+                VideoCategory.ANIMATION,
+                VideoCategory.MUSIC,
+                VideoCategory.KIDS_SONGS,
+                VideoCategory.STORIES,
+                VideoCategory.SCIENCE,
+                VideoCategory.ART_CRAFTS,
+                VideoCategory.LEARNING,
+                VideoCategory.GAMES
+            ),
+            maxTitleLength = 220
+        ),
         AgeGroup.UNDER_14 to AgeConfig(
-            maxDuration = 2400,
+            maxDuration = 2700,  // 45 min
             strictMode = false,
             allowedCategories = VideoCategory.entries.toSet(),
             maxTitleLength = 250
         ),
         AgeGroup.UNDER_16 to AgeConfig(
-            maxDuration = 3600,
+            maxDuration = 3600,  // 60 min
             strictMode = false,
             allowedCategories = VideoCategory.entries.toSet(),
             maxTitleLength = 300
@@ -74,6 +105,14 @@ object FilterConfig {
             "UCeirmJxuV9HM9VdG0ykDJhg", // Little Baby Bum
             "UCPPJnlbQSvdXhFOZXWqangg"  // BabyBus
         ),
+        AgeGroup.UNDER_8 to setOf(
+            "UCBnZ16ahKA2DZ_T5W0FPUXg", // CoComelon
+            "UC4NALVCmcmL5ntpKx19zoJQ", // Pinkfong
+            "UCkQO3QsgTpNTsOw6ujimT5Q", // Blippi
+            "UC-Gm4EN7nNNR3k67J8ywF4A", // Super Simple Songs
+            "UCeirmJxuV9HM9VdG0ykDJhg", // Little Baby Bum
+            "UC295-Dw_tDNtZXFeAPAQKEw"  // National Geographic Kids
+        ),
         AgeGroup.UNDER_10 to setOf(
             "UCBnZ16ahKA2DZ_T5W0FPUXg",
             "UC4NALVCmcmL5ntpKx19zoJQ",
@@ -85,6 +124,13 @@ object FilterConfig {
             "UCX6OQ3DkcsbYNE6H8uQQuVA",
             "UC295-Dw_tDNtZXFeAPAQKEw",
             "UCsooa4yRKGN_zEE8iknghZA", // TED-Ed
+            "UC7_YxT-KID8kRbqZo7MyscQ"  // Markiplier (clean gaming)
+        ),
+        AgeGroup.UNDER_13 to setOf(
+            "UCX6OQ3DkcsbYNE6H8uQQuVA", // Crash Course
+            "UC295-Dw_tDNtZXFeAPAQKEw", // National Geographic Kids
+            "UCsooa4yRKGN_zEE8iknghZA", // TED-Ed
+            "UCvGQ8CnL3u7bE5BO8E0ZXzA", // SciShow Kids
             "UC7_YxT-KID8kRbqZo7MyscQ"  // Markiplier (clean gaming)
         ),
         AgeGroup.UNDER_14 to setOf(
@@ -109,6 +155,14 @@ object FilterConfig {
             "slender", "fnaf", "jumpscare", "haunted", "ghost", "zombie", "monster", "scream",
             "disturbing", "graphic", "bloody", "gory", "violent", "dark", "twisted", "insane"
         ),
+        AgeGroup.UNDER_8 to setOf(
+            "horror", "blood", "kill", "death", "gun", "weapon", "fight", "war", "drug",
+            "alcohol", "smoking", "sex", "nude", "adult", "mature", "violence", "murder",
+            "suicide", "abuse", "creepy", "nightmare", "demon", "evil", "satan",
+            "r-rated", "explicit", "uncensored", "18+", "nsfw", "gone sexual",
+            "slender", "fnaf", "jumpscare", "haunted", "ghost", "zombie", "monster",
+            "disturbing", "graphic", "bloody", "gory", "violent", "dark"
+        ),
         AgeGroup.UNDER_10 to setOf(
             "horror", "blood", "kill", "death", "gun", "weapon", "drug", "alcohol", "smoking",
             "sex", "nude", "adult", "mature", "violence", "murder", "suicide", "abuse",
@@ -120,6 +174,12 @@ object FilterConfig {
             "horror", "blood", "gore", "drug", "alcohol", "sex", "nude", "adult", "mature",
             "murder", "suicide", "r-rated", "explicit", "18+", "nsfw", "gone sexual",
             "disturbing", "graphic content",
+            "how to watch adult", "bypass age", "age restriction", "restricted content"
+        ),
+        AgeGroup.UNDER_13 to setOf(
+            "horror", "gore", "drug", "sex", "nude", "adult", "mature",
+            "suicide", "r-rated", "explicit", "18+", "nsfw", "gone sexual",
+            "graphic content",
             "how to watch adult", "bypass age", "age restriction", "restricted content"
         ),
         AgeGroup.UNDER_14 to setOf(

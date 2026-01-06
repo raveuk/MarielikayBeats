@@ -82,12 +82,6 @@ fun ParentalControlScreen(
                         }
                     } ?: LoadingRestrictionsCard()
 
-                    // Device protection
-                    DeviceProtectionCard(
-                        isAdminActive = isAdminActive,
-                        onEnableAdmin = { activity?.let { deviceAdminManager.requestAdminActivation(it) } }
-                    )
-
                     // Manage connection
                     OutlinedCard(
                         modifier = Modifier.fillMaxWidth(),

@@ -57,7 +57,7 @@ class CloudPairingClient(
     private var deviceListener: ListenerRegistration? = null
 
     // Premium Content Filter
-    val contentFilter = CloudContentFilter(firestore)
+    val contentFilter = CloudContentFilter(firestore = firestore)
 
     /**
      * Get the device ID, generating one if needed.

@@ -19,6 +19,7 @@ import java.util.Date
  * - Reporting blocked content attempts
  */
 class CloudContentFilter(
+    private val remoteConfigManager: RemoteConfigManager = RemoteConfigManager(),
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
     companion object {
@@ -86,6 +87,11 @@ class CloudContentFilter(
 
     @Suppress("UNCHECKED_CAST")
     private fun parseFilterSettings(data: Map<String, Any?>): CloudFilterSettings {
+        val ageRating = data["ageRating"] as? String ?: "ALL"
+        val ageBasedEnabled = data["ageBasedFilteringEnabled"] as? Boolean ?: false
+
+        Log.d(TAG, "Parsing filter settings - ageRating: $ageRating, ageBasedEnabled: $ageBasedEnabled")
+
         return CloudFilterSettings(
             blockedKeywords = (data["blockedKeywords"] as? List<String>) ?: emptyList(),
             blockedChannels = (data["blockedChannels"] as? List<Map<String, Any?>>)?.map { map ->
@@ -111,6 +117,13 @@ class CloudContentFilter(
             maxVideoDurationMinutes = (data["maxVideoDurationMinutes"] as? Long)?.toInt() ?: 0,
             watchHistoryEnabled = data["watchHistoryEnabled"] as? Boolean ?: true,
             blockAlertsEnabled = data["blockAlertsEnabled"] as? Boolean ?: true,
+
+            // AGE-BASED FILTERING (NEW)
+            ageRating = ageRating,
+            ageBasedFilteringEnabled = ageBasedEnabled,
+            ageBlockedKeywords = (data["ageBlockedKeywords"] as? List<String>) ?: emptyList(),
+            ageMaxDurationSeconds = (data["ageMaxDurationSeconds"] as? Long) ?: 0,
+
             // Music-specific settings
             blockedArtists = (data["blockedArtists"] as? List<Map<String, Any?>>)?.map { map ->
                 BlockedArtistInfo(
@@ -144,6 +157,18 @@ class CloudContentFilter(
         isLiveStream: Boolean = false,
         category: String? = null
     ): BlockResult {
+        // Layer 1: Check global blocks (developer-controlled)
+        val globalKeywordCheck = remoteConfigManager.isGloballyBlocked("$title $channelName ${description ?: ""}")
+        if (globalKeywordCheck.isBlocked) {
+            return BlockResult(true, BlockReason.BLOCKED_KEYWORD, globalKeywordCheck.message)
+        }
+
+        val globalChannelCheck = remoteConfigManager.isChannelGloballyBlocked(channelId, channelName)
+        if (globalChannelCheck.isBlocked) {
+            return BlockResult(true, BlockReason.BLOCKED_CHANNEL, globalChannelCheck.message)
+        }
+
+        // Layer 2: Check parent blocks (family-specific)
         val settings = _filterSettings.value
 
         // Check video ID blocklist
@@ -202,6 +227,24 @@ class CloudContentFilter(
             return BlockResult(true, BlockReason.BLOCKED_CATEGORY, "This category is blocked")
         }
 
+        // Layer 3: Age-based filtering (synced from parent)
+        if (settings.ageBasedFilteringEnabled) {
+            // Age-based duration check
+            if (settings.ageMaxDurationSeconds > 0 && durationSeconds > settings.ageMaxDurationSeconds) {
+                val maxMinutes = settings.ageMaxDurationSeconds / 60
+                Log.d(TAG, "Age-based duration block: $durationSeconds sec > ${settings.ageMaxDurationSeconds} sec (max $maxMinutes min for ${settings.ageRating})")
+                return BlockResult(true, BlockReason.AGE_RESTRICTED, "Video too long for age group (max ${maxMinutes}min)")
+            }
+
+            // Age-based keyword check
+            for (keyword in settings.ageBlockedKeywords) {
+                if (textToCheck.contains(keyword.lowercase())) {
+                    Log.d(TAG, "Age-based keyword block: found '$keyword' in content (age: ${settings.ageRating})")
+                    return BlockResult(true, BlockReason.AGE_RESTRICTED, "Contains age-inappropriate content")
+                }
+            }
+        }
+
         return BlockResult(false, null, null)
     }
 
@@ -223,6 +266,16 @@ class CloudContentFilter(
         for (keyword in settings.blockedKeywords) {
             if (queryLower.contains(keyword.lowercase())) {
                 return BlockResult(true, BlockReason.BLOCKED_KEYWORD, "Search contains blocked keyword")
+            }
+        }
+
+        // Age-based keyword blocking for search
+        if (settings.ageBasedFilteringEnabled) {
+            for (keyword in settings.ageBlockedKeywords) {
+                if (queryLower.contains(keyword.lowercase())) {
+                    Log.d(TAG, "Age-based search block: found '$keyword' in query (age: ${settings.ageRating})")
+                    return BlockResult(true, BlockReason.AGE_RESTRICTED, "Search term not appropriate for age group")
+                }
             }
         }
 
@@ -250,6 +303,18 @@ class CloudContentFilter(
         durationSeconds: Long = 0,
         isExplicit: Boolean = false
     ): BlockResult {
+        // Layer 1: Check global blocks (developer-controlled)
+        val globalKeywordCheck = remoteConfigManager.isGloballyBlocked("$title $artistName ${albumName ?: ""}")
+        if (globalKeywordCheck.isBlocked) {
+            return BlockResult(true, BlockReason.BLOCKED_KEYWORD, globalKeywordCheck.message)
+        }
+
+        val globalArtistCheck = remoteConfigManager.isArtistGloballyBlocked(artistId, artistName)
+        if (globalArtistCheck.isBlocked) {
+            return BlockResult(true, BlockReason.BLOCKED_ARTIST, globalArtistCheck.message)
+        }
+
+        // Layer 2: Check parent blocks (family-specific)
         val settings = _filterSettings.value
 
         // Check explicit content
@@ -301,6 +366,24 @@ class CloudContentFilter(
         // Genre/Category check
         if (genre != null && settings.blockedCategories.any { it.equals(genre, ignoreCase = true) }) {
             return BlockResult(true, BlockReason.BLOCKED_CATEGORY, "This genre is blocked")
+        }
+
+        // Layer 3: Age-based filtering (synced from parent)
+        if (settings.ageBasedFilteringEnabled) {
+            // Age-based duration check for music
+            if (settings.ageMaxDurationSeconds > 0 && durationSeconds > settings.ageMaxDurationSeconds) {
+                val maxMinutes = settings.ageMaxDurationSeconds / 60
+                Log.d(TAG, "Age-based music duration block: $durationSeconds sec > ${settings.ageMaxDurationSeconds} sec (max $maxMinutes min for ${settings.ageRating})")
+                return BlockResult(true, BlockReason.AGE_RESTRICTED, "Track too long for age group (max ${maxMinutes}min)")
+            }
+
+            // Age-based keyword check for music
+            for (keyword in settings.ageBlockedKeywords) {
+                if (textToCheck.contains(keyword.lowercase())) {
+                    Log.d(TAG, "Age-based music keyword block: found '$keyword' in content (age: ${settings.ageRating})")
+                    return BlockResult(true, BlockReason.AGE_RESTRICTED, "Contains age-inappropriate content")
+                }
+            }
         }
 
         return BlockResult(false, null, null)
@@ -514,6 +597,12 @@ data class CloudFilterSettings(
     val strictModeEnabled: Boolean = false,
     val watchHistoryEnabled: Boolean = true,
     val blockAlertsEnabled: Boolean = true,
+
+    // AGE-BASED FILTERING (NEW)
+    val ageRating: String = "ALL",
+    val ageBasedFilteringEnabled: Boolean = false,
+    val ageBlockedKeywords: List<String> = emptyList(),
+    val ageMaxDurationSeconds: Long = 0,
 
     // Video-specific settings
     val blockedChannels: List<BlockedChannelInfo> = emptyList(),

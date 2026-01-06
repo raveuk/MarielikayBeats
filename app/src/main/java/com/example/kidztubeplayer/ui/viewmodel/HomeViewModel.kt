@@ -393,17 +393,33 @@ class HomeViewModel(
     }
 
     /**
+     * Convert cloud age rating string to AgeRating enum
+     */
+    private fun parseAgeRating(ageRatingString: String?): AgeRating {
+        return when (ageRatingString) {
+            "FIVE_PLUS" -> AgeRating.FIVE_PLUS
+            "TEN_PLUS" -> AgeRating.TEN_PLUS
+            "TWELVE_PLUS" -> AgeRating.TWELVE_PLUS
+            "FOURTEEN_PLUS" -> AgeRating.FOURTEEN_PLUS
+            "SIXTEEN_PLUS" -> AgeRating.SIXTEEN_PLUS
+            else -> AgeRating.ALL
+        }
+    }
+
+    /**
      * Observe parental control state from Firebase cloud
      * When not linked to family, operates in unrestricted mode
      */
     private fun observeBridgeState() {
+        // Observe pairing status
         viewModelScope.launch {
             cloudPairingClient.pairingStatus.collect { pairingStatus ->
                 val isLinkedToFamily = pairingStatus is com.zimbabeats.cloud.PairingStatus.Paired
                 val isEnabled = contentFilter?.filterSettings?.value?.let { true } ?: false
 
-                // For now, use ALL age level - can be extended to sync age level from Firebase
-                val currentAgeLevel = AgeRating.ALL
+                // Get age rating from cloud settings (synced from Family app)
+                val cloudAgeRating = cloudPairingClient.cloudSettings.value?.ageRating
+                val currentAgeLevel = parseAgeRating(cloudAgeRating)
 
                 // Kids mode is ON when linked to family
                 val isKidsMode = isLinkedToFamily
@@ -465,6 +481,44 @@ class HomeViewModel(
                     Log.d(TAG, "isKidsMode=$isKidsMode, ageLevel=${currentAgeLevel.displayName}")
                     loadVideoContent()
                     loadMoodSections(currentAgeLevel)
+                }
+            }
+        }
+
+        // Also observe cloud settings changes (e.g., parent changes age rating)
+        viewModelScope.launch {
+            cloudPairingClient.cloudSettings.collect { cloudSettings ->
+                if (cloudSettings == null) return@collect
+
+                val pairingStatus = cloudPairingClient.pairingStatus.value
+                val isLinkedToFamily = pairingStatus is com.zimbabeats.cloud.PairingStatus.Paired
+                if (!isLinkedToFamily) return@collect
+
+                val newAgeLevel = parseAgeRating(cloudSettings.ageRating)
+                val currentAgeLevel = _uiState.value.selectedAgeLevel
+
+                // Check if age level actually changed
+                if (newAgeLevel != currentAgeLevel) {
+                    Log.d(TAG, "=== CLOUD SETTINGS CHANGED ===")
+                    Log.d(TAG, "Age rating changed: ${currentAgeLevel.displayName} -> ${newAgeLevel.displayName}")
+
+                    // Update UI state with new age level
+                    val ageCategories = getCategoriesForAge(newAgeLevel)
+                    val ageChannels = getChannelsForAge(newAgeLevel)
+                    val ageMoods = getMoodSectionsForAge(newAgeLevel)
+
+                    _uiState.value = _uiState.value.copy(
+                        selectedAgeLevel = newAgeLevel,
+                        categories = ageCategories,
+                        popularChannels = ageChannels,
+                        moodSections = ageMoods,
+                        videos = emptyList(),
+                        quickPicks = emptyList()
+                    )
+
+                    // Reload content with new age level
+                    loadVideoContent()
+                    loadMoodSections(newAgeLevel)
                 }
             }
         }
