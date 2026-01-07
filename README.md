@@ -1,5 +1,6 @@
 <p align="center">
-  <img src="fastlane/metadata/android/en-US/images/icon.png" width="120" alt="ZimbaBeats"/>
+  <img src="https://zimbabeats.com/images/zimbaBeats.png" width="120" alt="ZimbaBeats"/>
+  <img src="https://zimbabeats.com/images/ZimbaBeatsFamily.png" width="120" alt="ZimbaBeats Family"/>
 </p>
 
 <h1 align="center">ZimbaBeats</h1>
