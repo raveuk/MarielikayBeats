@@ -1,6 +1,7 @@
 ﻿package com.zimbabeats.ui.screen
 
 import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -142,25 +143,28 @@ fun SettingsScreen(
                 SettingsItem(
                     icon = Icons.Default.Equalizer,
                     title = "System Equalizer",
-                    subtitle = "Adjust bass, treble, and more",
+                    subtitle = if (viewModel.isMusicPlaying()) "Adjust bass, treble, and more" else "Opens system audio settings",
                     onClick = {
-                        val equalizerIntent = viewModel.getEqualizerIntent()
-                        if (equalizerIntent != null) {
+                        try {
+                            val equalizerIntent = viewModel.getEqualizerIntent()
+                            context.startActivity(equalizerIntent)
+                        } catch (e: ActivityNotFoundException) {
+                            // Try fallback: open general sound settings
                             try {
-                                context.startActivity(equalizerIntent)
-                            } catch (e: ActivityNotFoundException) {
+                                val fallbackIntent = Intent(android.provider.Settings.ACTION_SOUND_SETTINGS)
+                                context.startActivity(fallbackIntent)
                                 Toast.makeText(
                                     context,
-                                    "No equalizer app found on this device",
+                                    "No equalizer app found. Opening sound settings instead.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } catch (e2: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    "No equalizer or sound settings available on this device",
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
-                        } else {
-                            Toast.makeText(
-                                context,
-                                "Play some music first to access the equalizer",
-                                Toast.LENGTH_SHORT
-                            ).show()
                         }
                     }
                 )

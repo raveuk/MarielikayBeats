@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zimbabeats.cloud.CloudPairingClient
 import com.zimbabeats.cloud.PairingStatus
+import com.zimbabeats.cloud.RemoteConfigManager
 import com.zimbabeats.core.domain.model.music.MusicSearchFilter
 import com.zimbabeats.core.domain.model.music.MusicSearchResult
 import com.zimbabeats.core.domain.repository.MusicRepository
@@ -38,8 +39,11 @@ class MusicSearchViewModel(
         private const val TAG = "MusicSearchViewModel"
     }
 
-    // Cloud-based content filter (Firebase)
+    // Cloud-based content filter (Firebase) - for family-specific rules
     private val contentFilter get() = cloudPairingClient.contentFilter
+
+    // Global content filter (RemoteConfig) - ALWAYS applies regardless of family linking
+    private val remoteConfigManager = RemoteConfigManager()
 
     private val _uiState = MutableStateFlow(MusicSearchUiState())
     val uiState: StateFlow<MusicSearchUiState> = _uiState.asStateFlow()
@@ -71,55 +75,88 @@ class MusicSearchViewModel(
     }
 
     /**
-     * Filter music search results using Cloud Content Filter (Firebase-based).
-     * When not linked to family, all results are allowed (unrestricted mode).
+     * Filter music search results using both Global blocks and Cloud Content Filter.
+     * Global blocks ALWAYS apply regardless of family linking.
      */
     private fun filterMusicResults(results: List<MusicSearchResult>): List<MusicSearchResult> {
-        val filter = contentFilter ?: return results // Unrestricted mode if not linked
-
         return results.filter { result ->
-            val (id, title, artistName, albumName, isExplicit) = when (result) {
-                is MusicSearchResult.TrackResult -> listOf(
-                    result.track.id,
-                    result.track.title,
-                    result.track.artistName,
-                    result.track.albumName ?: "",
-                    result.track.isExplicit.toString()
-                )
-                is MusicSearchResult.ArtistResult -> listOf(
-                    result.artist.id,
-                    result.artist.name,
-                    result.artist.name,
-                    "",
-                    "false"
-                )
-                is MusicSearchResult.AlbumResult -> listOf(
-                    result.album.id,
-                    result.album.title,
-                    result.album.artistName,
-                    result.album.title,
-                    "false"
-                )
-                is MusicSearchResult.PlaylistResult -> listOf(
-                    result.playlist.id,
-                    result.playlist.title,
-                    result.playlist.author ?: "",
-                    "",
-                    "false"
-                )
+            // Extract result properties based on type
+            val id: String
+            val title: String
+            val artistId: String
+            val artistName: String
+            val albumName: String
+            val isExplicit: Boolean
+
+            when (result) {
+                is MusicSearchResult.TrackResult -> {
+                    id = result.track.id
+                    title = result.track.title
+                    artistId = result.track.artistId ?: ""
+                    artistName = result.track.artistName
+                    albumName = result.track.albumName ?: ""
+                    isExplicit = result.track.isExplicit
+                }
+                is MusicSearchResult.ArtistResult -> {
+                    id = result.artist.id
+                    title = result.artist.name
+                    artistId = result.artist.id
+                    artistName = result.artist.name
+                    albumName = ""
+                    isExplicit = false
+                }
+                is MusicSearchResult.AlbumResult -> {
+                    id = result.album.id
+                    title = result.album.title
+                    artistId = ""
+                    artistName = result.album.artistName
+                    albumName = result.album.title
+                    isExplicit = false
+                }
+                is MusicSearchResult.PlaylistResult -> {
+                    id = result.playlist.id
+                    title = result.playlist.title
+                    artistId = ""
+                    artistName = result.playlist.author ?: ""
+                    albumName = ""
+                    isExplicit = false
+                }
             }
 
-            val blockResult = filter.shouldBlockMusicContent(
-                trackId = id,
-                title = title,
-                artistId = "",
-                artistName = artistName,
-                albumName = albumName,
-                genre = null,
-                durationSeconds = 0L,
-                isExplicit = isExplicit.toBoolean()
-            )
-            !blockResult.isBlocked
+            // ALWAYS check global blocks first (regardless of family linking)
+            val textToCheck = "$title $artistName $albumName"
+            val globalKeywordBlock = remoteConfigManager.isGloballyBlocked(textToCheck)
+            if (globalKeywordBlock.isBlocked) {
+                Log.d(TAG, "Search result '$title' blocked by global keyword filter")
+                return@filter false
+            }
+
+            val globalArtistBlock = remoteConfigManager.isArtistGloballyBlocked(artistId, artistName)
+            if (globalArtistBlock.isBlocked) {
+                Log.d(TAG, "Search result '$title' by '$artistName' blocked by global artist filter")
+                return@filter false
+            }
+
+            // If linked to family, also apply family-specific rules
+            val filter = contentFilter
+            if (filter != null) {
+                val blockResult = filter.shouldBlockMusicContent(
+                    trackId = id,
+                    title = title,
+                    artistId = artistId,
+                    artistName = artistName,
+                    albumName = albumName,
+                    genre = null,
+                    durationSeconds = 0L,
+                    isExplicit = isExplicit
+                )
+                if (blockResult.isBlocked) {
+                    Log.d(TAG, "Search result '$title' blocked by family filter: ${blockResult.reason}")
+                    return@filter false
+                }
+            }
+
+            true // Not blocked
         }
     }
 

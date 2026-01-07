@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.zimbabeats.bridge.ParentalControlBridge
+import com.zimbabeats.cloud.CloudPairingClient
 import com.zimbabeats.data.AppPreferences
 import com.zimbabeats.data.ThemeMode
 import com.zimbabeats.ui.screen.BlockReason
@@ -37,7 +38,9 @@ import com.zimbabeats.ui.navigation.ZimbaBeatsNavHost
 import com.zimbabeats.ui.navigation.Screen
 import com.zimbabeats.ui.screen.BlockScreen
 import com.zimbabeats.ui.screen.OnboardingScreen
+import com.zimbabeats.ui.screen.ParentUnlockDialog
 import com.zimbabeats.ui.screen.ScreenTimeWarningDialog
+import com.zimbabeats.ui.screen.UnlockOption
 import com.zimbabeats.ui.theme.ZimbaBeatsTheme
 import com.zimbabeats.ui.util.LocalWindowSizeClass
 import com.zimbabeats.family.ipc.PlaybackVerdict
@@ -47,6 +50,7 @@ import org.koin.android.ext.android.inject
 class MainActivity : ComponentActivity() {
     private val appPreferences: AppPreferences by inject()
     private val parentalControlBridge: ParentalControlBridge by inject()
+    private val cloudPairingClient: CloudPairingClient by inject()
 
     @androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,6 +82,10 @@ class MainActivity : ComponentActivity() {
             var showBlockScreen by remember { mutableStateOf<BlockReason?>(null) }
             var showWarningDialog by remember { mutableStateOf(false) }
             var warningMinutes by remember { mutableStateOf(0) }
+
+            // State for parent unlock dialog
+            var showParentUnlockDialog by remember { mutableStateOf(false) }
+            var pinError by remember { mutableStateOf<String?>(null) }
 
             // Observe lifecycle for app active/background notification to companion app
             val lifecycleOwner = LocalLifecycleOwner.current
@@ -183,10 +191,55 @@ class MainActivity : ComponentActivity() {
                         BlockScreen(
                             blockReason = showBlockScreen!!,
                             onParentUnlock = {
-                                // Open companion app for parent unlock
-                                openCompanionApp()
+                                // Show PIN dialog for parent authentication
+                                pinError = null
+                                showParentUnlockDialog = true
                             }
                         )
+
+                        // Parent Unlock PIN Dialog
+                        if (showParentUnlockDialog) {
+                            ParentUnlockDialog(
+                                onPinEntered = { pinAndOption ->
+                                    // Parse PIN and option from combined string "1234:EXTEND_30_MIN"
+                                    val parts = pinAndOption.split(":")
+                                    val pin = parts.getOrNull(0) ?: ""
+                                    val optionName = parts.getOrNull(1) ?: "EXTEND_30_MIN"
+
+                                    // Try verification - first with companion app (AIDL), then with cloud
+                                    val isPinValid = if (parentalControlBridge.isCompanionActive()) {
+                                        // Verify PIN with companion app via AIDL
+                                        parentalControlBridge.verifyPin(pin).success
+                                    } else if (cloudPairingClient.isPaired()) {
+                                        // Verify PIN with cloud-stored hash
+                                        cloudPairingClient.verifyCloudPin(pin)
+                                    } else {
+                                        false
+                                    }
+
+                                    if (isPinValid) {
+                                        // PIN correct - request unlock with selected option
+                                        val unlockType = when (optionName) {
+                                            "EXTEND_30_MIN" -> 30
+                                            "EXTEND_60_MIN" -> 60
+                                            "UNLOCK_TODAY" -> -1
+                                            else -> 30
+                                        }
+                                        parentalControlBridge.requestParentUnlock(unlockType)
+                                        showParentUnlockDialog = false
+                                        showBlockScreen = null
+                                    } else {
+                                        // PIN incorrect
+                                        pinError = "Incorrect PIN. Please try again."
+                                    }
+                                },
+                                onDismiss = {
+                                    showParentUnlockDialog = false
+                                    pinError = null
+                                },
+                                pinError = pinError
+                            )
+                        }
                     } else {
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),

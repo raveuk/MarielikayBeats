@@ -221,18 +221,21 @@ class InnertubeClient(private val httpClient: HttpClient) {
 
     /**
      * Search for videos using Innertube API
-     * Always uses WEB client - filtering is done on our side
+     * Uses WEB_KIDS client when kid-safe mode is enabled for additional protection
      */
     suspend fun searchVideos(query: String): List<YouTubeVideo> = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Searching for: $query (kidSafeMode: $kidSafeModeEnabled)")
+            // Choose client based on kid-safe mode
+            val clientName = if (kidSafeModeEnabled) KIDS_CLIENT_NAME else SEARCH_CLIENT_NAME
+            val clientVersion = if (kidSafeModeEnabled) KIDS_CLIENT_VERSION else SEARCH_CLIENT_VERSION
+            Log.d(TAG, "Searching for: $query (kidSafeMode: $kidSafeModeEnabled, client: $clientName)")
 
-            // Build Innertube search request - always use WEB client
+            // Build Innertube search request - use WEB_KIDS for kids mode, WEB otherwise
             val requestBody = buildJsonObject {
                 putJsonObject("context") {
                     putJsonObject("client") {
-                        put("clientName", SEARCH_CLIENT_NAME)
-                        put("clientVersion", SEARCH_CLIENT_VERSION)
+                        put("clientName", clientName)
+                        put("clientVersion", clientVersion)
                         put("hl", "en")
                         put("gl", "US")
                     }
@@ -416,16 +419,20 @@ class InnertubeClient(private val httpClient: HttpClient) {
 
     /**
      * Search for videos with spelling correction support
+     * Uses WEB_KIDS client when kid-safe mode is enabled for additional protection
      */
     suspend fun searchVideosWithCorrection(query: String): SearchResultWithCorrection = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Searching with correction for: $query (kidSafeMode: $kidSafeModeEnabled)")
+            // Choose client based on kid-safe mode
+            val clientName = if (kidSafeModeEnabled) KIDS_CLIENT_NAME else SEARCH_CLIENT_NAME
+            val clientVersion = if (kidSafeModeEnabled) KIDS_CLIENT_VERSION else SEARCH_CLIENT_VERSION
+            Log.d(TAG, "Searching with correction for: $query (kidSafeMode: $kidSafeModeEnabled, client: $clientName)")
 
             val requestBody = buildJsonObject {
                 putJsonObject("context") {
                     putJsonObject("client") {
-                        put("clientName", SEARCH_CLIENT_NAME)
-                        put("clientVersion", SEARCH_CLIENT_VERSION)
+                        put("clientName", clientName)
+                        put("clientVersion", clientVersion)
                         put("hl", "en")
                         put("gl", "US")
                     }

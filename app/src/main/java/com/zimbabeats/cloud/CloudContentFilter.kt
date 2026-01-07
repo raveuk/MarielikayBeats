@@ -184,15 +184,19 @@ class CloudContentFilter(
             return BlockResult(true, BlockReason.BLOCKED_CHANNEL, "This channel has been blocked")
         }
 
-        // Whitelist mode check
-        if (settings.allowedChannelsOnly) {
+        // Whitelist mode check - only apply if there are actually whitelisted channels
+        if (settings.allowedChannelsOnly && settings.allowedChannels.isNotEmpty()) {
             val isAllowed = settings.allowedChannels.any {
                 it.channelId.equals(channelId, ignoreCase = true) ||
                 it.channelName.equals(channelName, ignoreCase = true)
             }
             if (!isAllowed) {
+                Log.d(TAG, "Video blocked - channel '$channelName' not in whitelist of ${settings.allowedChannels.size} channels")
                 return BlockResult(true, BlockReason.NOT_WHITELISTED, "Only approved channels are allowed")
             }
+        } else if (settings.allowedChannelsOnly && settings.allowedChannels.isEmpty()) {
+            // Whitelist mode is ON but no channels added - log warning but allow content
+            Log.w(TAG, "Whitelist mode enabled but no channels added - allowing content by default")
         }
 
         // Live stream check
@@ -330,15 +334,19 @@ class CloudContentFilter(
             return BlockResult(true, BlockReason.BLOCKED_ARTIST, "This artist is blocked")
         }
 
-        // Whitelist mode check for artists
-        if (settings.allowedChannelsOnly) {
+        // Whitelist mode check for artists - only apply if there are actually whitelisted artists
+        if (settings.allowedChannelsOnly && settings.allowedArtists.isNotEmpty()) {
             val isAllowed = settings.allowedArtists.any {
                 it.artistId.equals(artistId, ignoreCase = true) ||
                 it.artistName.equals(artistName, ignoreCase = true)
             }
             if (!isAllowed) {
+                Log.d(TAG, "Music blocked - artist '$artistName' not in whitelist of ${settings.allowedArtists.size} artists")
                 return BlockResult(true, BlockReason.NOT_WHITELISTED, "Only approved artists are allowed")
             }
+        } else if (settings.allowedChannelsOnly && settings.allowedArtists.isEmpty()) {
+            // Whitelist mode is ON but no artists added - log warning but allow content
+            Log.w(TAG, "Whitelist mode enabled but no artists added - allowing music by default")
         }
 
         // Duration check for music

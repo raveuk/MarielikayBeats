@@ -11,6 +11,7 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -94,19 +95,6 @@ class ZimbaBeatsPlayer(private val context: Context) {
     fun playVideo(videoUrl: String, title: String) {
         Log.d(TAG, "Playing stream: $videoUrl")
 
-        // Create data source factory with Android YouTube Music headers
-        // This matches the ANDROID_MUSIC client used to get the stream URLs
-        val dataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("com.google.android.apps.youtube.music/6.42.52 (Linux; U; Android 14) gzip")
-            .setDefaultRequestProperties(mapOf(
-                "Accept" to "*/*",
-                "Accept-Encoding" to "identity;q=1, *;q=0",
-                "Accept-Language" to "en-US,en;q=0.9"
-            ))
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(15000)
-            .setAllowCrossProtocolRedirects(true)
-
         val mediaItem = MediaItem.Builder()
             .setUri(videoUrl)
             .setMediaMetadata(
@@ -116,17 +104,41 @@ class ZimbaBeatsPlayer(private val context: Context) {
             )
             .build()
 
-        // Detect stream type and use appropriate media source
-        val mediaSource: MediaSource = when {
-            videoUrl.contains(".m3u8") || videoUrl.contains("manifest") -> {
-                Log.d(TAG, "Using HLS media source for: $videoUrl")
-                HlsMediaSource.Factory(dataSourceFactory)
-                    .createMediaSource(mediaItem)
-            }
-            else -> {
-                Log.d(TAG, "Using Progressive media source for: $videoUrl")
-                ProgressiveMediaSource.Factory(dataSourceFactory)
-                    .createMediaSource(mediaItem)
+        // Detect if this is a local file or network stream
+        val isLocalFile = videoUrl.startsWith("file://") || videoUrl.startsWith("/")
+
+        val mediaSource: MediaSource = if (isLocalFile) {
+            // Use DefaultDataSource for local files (supports file:// URIs)
+            Log.d(TAG, "Using local file playback for: $videoUrl")
+            val localDataSourceFactory = DefaultDataSource.Factory(context)
+            ProgressiveMediaSource.Factory(localDataSourceFactory)
+                .createMediaSource(mediaItem)
+        } else {
+            // Create data source factory with Android YouTube Music headers for network streams
+            // This matches the ANDROID_MUSIC client used to get the stream URLs
+            val networkDataSourceFactory = DefaultHttpDataSource.Factory()
+                .setUserAgent("com.google.android.apps.youtube.music/6.42.52 (Linux; U; Android 14) gzip")
+                .setDefaultRequestProperties(mapOf(
+                    "Accept" to "*/*",
+                    "Accept-Encoding" to "identity;q=1, *;q=0",
+                    "Accept-Language" to "en-US,en;q=0.9"
+                ))
+                .setConnectTimeoutMs(15000)
+                .setReadTimeoutMs(15000)
+                .setAllowCrossProtocolRedirects(true)
+
+            // Detect stream type and use appropriate media source
+            when {
+                videoUrl.contains(".m3u8") || videoUrl.contains("manifest") -> {
+                    Log.d(TAG, "Using HLS media source for: $videoUrl")
+                    HlsMediaSource.Factory(networkDataSourceFactory)
+                        .createMediaSource(mediaItem)
+                }
+                else -> {
+                    Log.d(TAG, "Using Progressive media source for: $videoUrl")
+                    ProgressiveMediaSource.Factory(networkDataSourceFactory)
+                        .createMediaSource(mediaItem)
+                }
             }
         }
 

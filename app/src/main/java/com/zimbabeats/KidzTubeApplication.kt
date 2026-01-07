@@ -15,14 +15,20 @@ import com.zimbabeats.cloud.CloudPairingClient
 import com.zimbabeats.cloud.RemoteConfigManager
 import com.zimbabeats.core.data.di.getDataModules
 import com.zimbabeats.core.domain.repository.VideoRepository
+import com.zimbabeats.data.AppPreferences
 import com.zimbabeats.di.appModule
 import com.zimbabeats.di.downloadModule
 import com.zimbabeats.di.viewModelModule
 import com.zimbabeats.di.zimbaSafeContentModule
 import com.zimbabeats.media.controller.MediaControllerManager
 import com.zimbabeats.media.di.mediaModule
+import com.zimbabeats.update.UpdateChecker
+import com.zimbabeats.update.UpdateResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import org.koin.android.ext.android.get
@@ -32,6 +38,13 @@ import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
 
 class ZimbaBeatsApplication : Application(), SingletonImageLoader.Factory {
+
+    // Global update state - can be observed by any screen
+    private val _updateState = MutableStateFlow<UpdateResult?>(null)
+    val updateState: StateFlow<UpdateResult?> = _updateState.asStateFlow()
+
+    // 24 hours in milliseconds
+    private val updateCheckCooldown = 24 * 60 * 60 * 1000L
 
     override fun onCreate() {
         super.onCreate()
@@ -67,9 +80,63 @@ class ZimbaBeatsApplication : Application(), SingletonImageLoader.Factory {
 
             // Clean up any cached dummy videos from old development builds
             cleanupDummyVideos()
+
+            // Check for app updates automatically
+            checkForAppUpdate()
         } catch (e: Exception) {
             android.util.Log.e("ZimbaBeats", "Koin initialization failed", e)
             throw e
+        }
+    }
+
+    /**
+     * Check for app updates on startup.
+     * Respects user preference and 24-hour cooldown.
+     */
+    private fun checkForAppUpdate() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val appPreferences: AppPreferences = get()
+
+                // Check if auto-update is enabled
+                if (!appPreferences.isAutoUpdateCheckEnabled()) {
+                    android.util.Log.d("ZimbaBeats", "Auto-update check disabled by user")
+                    return@launch
+                }
+
+                // Check cooldown (24 hours)
+                val lastCheck = appPreferences.getLastUpdateCheck()
+                val now = System.currentTimeMillis()
+                if ((now - lastCheck) < updateCheckCooldown) {
+                    android.util.Log.d("ZimbaBeats", "Skipping update check - cooldown not expired")
+                    return@launch
+                }
+
+                // Perform update check
+                android.util.Log.d("ZimbaBeats", "Checking for app updates...")
+                val updateChecker = UpdateChecker(this@ZimbaBeatsApplication)
+                val result = updateChecker.checkForUpdate()
+
+                // Update last check timestamp
+                appPreferences.setLastUpdateCheck(now)
+
+                // Store result globally
+                _updateState.value = result
+
+                when (result) {
+                    is UpdateResult.UpdateAvailable -> {
+                        android.util.Log.d("ZimbaBeats", "Update available: v${result.version}")
+                    }
+                    is UpdateResult.NoUpdate -> {
+                        android.util.Log.d("ZimbaBeats", "App is up to date")
+                    }
+                    is UpdateResult.Error -> {
+                        android.util.Log.e("ZimbaBeats", "Update check failed: ${result.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ZimbaBeats", "Failed to check for updates", e)
+            }
         }
     }
 

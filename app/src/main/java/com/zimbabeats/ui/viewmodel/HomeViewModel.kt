@@ -14,6 +14,8 @@ import com.zimbabeats.core.domain.util.Resource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 private const val TAG = "HomeViewModel"
@@ -559,43 +561,72 @@ class HomeViewModel(
         }
 
         // Also observe cloud settings changes (e.g., parent changes age rating)
+        // Use map + distinctUntilChanged to only react to actual age rating changes
         viewModelScope.launch {
-            cloudPairingClient.cloudSettings.collect { cloudSettings ->
-                if (cloudSettings == null) return@collect
+            cloudPairingClient.cloudSettings
+                .map { it?.ageRating }
+                .distinctUntilChanged()
+                .collect { ageRatingString ->
+                    if (ageRatingString == null) return@collect
 
-                val pairingStatus = cloudPairingClient.pairingStatus.value
-                val isLinkedToFamily = pairingStatus is com.zimbabeats.cloud.PairingStatus.Paired
-                if (!isLinkedToFamily) return@collect
+                    val pairingStatus = cloudPairingClient.pairingStatus.value
+                    val isLinkedToFamily = pairingStatus is com.zimbabeats.cloud.PairingStatus.Paired
+                    if (!isLinkedToFamily) return@collect
 
-                val newAgeLevel = parseAgeRating(cloudSettings.ageRating)
-                val currentAgeLevel = _uiState.value.selectedAgeLevel
+                    val newAgeLevel = parseAgeRating(ageRatingString)
+                    val currentAgeLevel = _uiState.value.selectedAgeLevel
 
-                // Check if age level actually changed
-                if (newAgeLevel != currentAgeLevel) {
-                    Log.d(TAG, "=== CLOUD SETTINGS CHANGED ===")
-                    Log.d(TAG, "Age rating changed: ${currentAgeLevel.displayName} -> ${newAgeLevel.displayName}")
+                    // Check if age level actually changed
+                    if (newAgeLevel != currentAgeLevel) {
+                        Log.d(TAG, "=== AGE RATING CHANGED (FAST PATH) ===")
+                        Log.d(TAG, "Age rating: ${currentAgeLevel.displayName} -> ${newAgeLevel.displayName}")
+                        Log.d(TAG, "Triggering immediate refresh...")
 
-                    // Update UI state with new age level
-                    val ageCategories = getCategoriesForAge(newAgeLevel)
-                    val ageChannels = getChannelsForAge(newAgeLevel)
-                    val ageMoods = getMoodSectionsForAge(newAgeLevel)
+                        // Update UI state with new age level
+                        val ageCategories = getCategoriesForAge(newAgeLevel)
+                        val ageChannels = getChannelsForAge(newAgeLevel)
+                        val ageMoods = getMoodSectionsForAge(newAgeLevel)
 
-                    // IMPORTANT: Set isLoading=true BEFORE clearing content to prevent empty state flash
-                    _uiState.value = _uiState.value.copy(
-                        selectedAgeLevel = newAgeLevel,
-                        categories = ageCategories,
-                        popularChannels = ageChannels,
-                        moodSections = ageMoods,
-                        videos = emptyList(),
-                        quickPicks = emptyList(),
-                        isLoading = true
-                    )
+                        // IMPORTANT: Set isLoading=true AND clear content immediately
+                        _uiState.value = _uiState.value.copy(
+                            selectedAgeLevel = newAgeLevel,
+                            categories = ageCategories,
+                            popularChannels = ageChannels,
+                            moodSections = ageMoods,
+                            videos = emptyList(),
+                            quickPicks = emptyList(),
+                            categoryVideos = emptyMap(),
+                            channelVideos = emptyMap(),
+                            isLoading = true
+                        )
 
-                    // Reload content with new age level
-                    loadVideoContent()
-                    loadMoodSections(newAgeLevel)
+                        // Reload content with new age level immediately
+                        loadVideoContent()
+                        loadMoodSections(newAgeLevel)
+                    }
                 }
-            }
+        }
+    }
+
+    /**
+     * Force refresh all content - useful for manual refresh or after settings changes
+     */
+    fun forceRefresh() {
+        viewModelScope.launch {
+            Log.d(TAG, "Force refresh triggered")
+            val currentAgeLevel = _uiState.value.selectedAgeLevel
+
+            // Clear and reload
+            _uiState.value = _uiState.value.copy(
+                videos = emptyList(),
+                quickPicks = emptyList(),
+                categoryVideos = emptyMap(),
+                channelVideos = emptyMap(),
+                isLoading = true
+            )
+
+            loadVideoContent()
+            loadMoodSections(currentAgeLevel)
         }
     }
 

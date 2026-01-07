@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zimbabeats.cloud.CloudPairingClient
 import com.zimbabeats.cloud.PairingStatus
+import com.zimbabeats.cloud.RemoteConfigManager
 import com.zimbabeats.core.domain.model.music.MusicBrowseItem
 import com.zimbabeats.core.domain.model.music.MusicBrowseSection
 import com.zimbabeats.core.domain.model.music.MusicSearchFilter
@@ -32,8 +33,11 @@ class MusicHomeViewModel(
     private val cloudPairingClient: CloudPairingClient
 ) : ViewModel() {
 
-    // Cloud-based content filter (Firebase)
+    // Cloud-based content filter (Firebase) - for family-specific rules
     private val contentFilter get() = cloudPairingClient.contentFilter
+
+    // Global content filter (RemoteConfig) - ALWAYS applies regardless of family linking
+    private val remoteConfigManager = RemoteConfigManager()
 
     companion object {
         private const val TAG = "MusicHomeViewModel"
@@ -62,76 +66,135 @@ class MusicHomeViewModel(
     val uiState: StateFlow<MusicHomeUiState> = _uiState.asStateFlow()
 
     /**
-     * Filter tracks using Cloud Content Filter (Firebase-based).
-     * When not linked to family, all tracks are allowed (unrestricted mode).
+     * Filter tracks using both Global blocks (RemoteConfig) and Cloud Content Filter (Firebase).
+     * Global blocks ALWAYS apply regardless of family linking.
+     * Family-specific blocks only apply when linked to a family.
      */
     private fun filterTracksWithBridge(tracks: List<Track>): List<Track> {
-        val filter = contentFilter ?: return tracks // Unrestricted mode if not linked
-
         return tracks.filter { track ->
-            val blockResult = filter.shouldBlockMusicContent(
-                trackId = track.id,
-                title = track.title,
-                artistId = track.artistId ?: "",
-                artistName = track.artistName,
-                albumName = track.albumName,
-                genre = null,
-                durationSeconds = track.duration / 1000L,
-                isExplicit = track.isExplicit
+            // ALWAYS check global blocks first (regardless of family linking)
+            val textToCheck = "${track.title} ${track.artistName} ${track.albumName ?: ""}"
+            val globalKeywordBlock = remoteConfigManager.isGloballyBlocked(textToCheck)
+            if (globalKeywordBlock.isBlocked) {
+                Log.d(TAG, "Track '${track.title}' blocked by global keyword filter")
+                return@filter false
+            }
+
+            val globalArtistBlock = remoteConfigManager.isArtistGloballyBlocked(
+                track.artistId ?: "",
+                track.artistName
             )
-            !blockResult.isBlocked
+            if (globalArtistBlock.isBlocked) {
+                Log.d(TAG, "Track '${track.title}' by '${track.artistName}' blocked by global artist filter")
+                return@filter false
+            }
+
+            // If linked to family, also apply family-specific rules
+            val filter = contentFilter
+            if (filter != null) {
+                val blockResult = filter.shouldBlockMusicContent(
+                    trackId = track.id,
+                    title = track.title,
+                    artistId = track.artistId ?: "",
+                    artistName = track.artistName,
+                    albumName = track.albumName,
+                    genre = null,
+                    durationSeconds = track.duration / 1000L,
+                    isExplicit = track.isExplicit
+                )
+                if (blockResult.isBlocked) {
+                    Log.d(TAG, "Track '${track.title}' blocked by family filter: ${blockResult.reason}")
+                    return@filter false
+                }
+            }
+
+            true // Not blocked
         }
     }
 
     /**
-     * Filter music browse items using Cloud Content Filter (Firebase-based).
+     * Filter music browse items using both Global blocks and Cloud Content Filter.
+     * Global blocks ALWAYS apply regardless of family linking.
      */
     private fun filterBrowseItemsWithBridge(items: List<MusicBrowseItem>): List<MusicBrowseItem> {
-        val filter = contentFilter ?: return items // Unrestricted mode if not linked
-
         return items.filter { item ->
-            val (id, title, artistName, albumName, isExplicit) = when (item) {
-                is MusicBrowseItem.TrackItem -> listOf(
-                    item.track.id,
-                    item.track.title,
-                    item.track.artistName,
-                    item.track.albumName ?: "",
-                    item.track.isExplicit.toString()
-                )
-                is MusicBrowseItem.AlbumItem -> listOf(
-                    item.album.id,
-                    item.album.title,
-                    item.album.artistName,
-                    item.album.title,
-                    "false"
-                )
-                is MusicBrowseItem.ArtistItem -> listOf(
-                    item.artist.id,
-                    item.artist.name,
-                    item.artist.name,
-                    "",
-                    "false"
-                )
-                is MusicBrowseItem.PlaylistItem -> listOf(
-                    item.playlist.id,
-                    item.playlist.title,
-                    item.playlist.author ?: "",
-                    "",
-                    "false"
-                )
+            // Extract item properties based on type
+            val id: String
+            val title: String
+            val artistId: String
+            val artistName: String
+            val albumName: String
+            val isExplicit: Boolean
+
+            when (item) {
+                is MusicBrowseItem.TrackItem -> {
+                    id = item.track.id
+                    title = item.track.title
+                    artistId = item.track.artistId ?: ""
+                    artistName = item.track.artistName
+                    albumName = item.track.albumName ?: ""
+                    isExplicit = item.track.isExplicit
+                }
+                is MusicBrowseItem.AlbumItem -> {
+                    id = item.album.id
+                    title = item.album.title
+                    artistId = ""
+                    artistName = item.album.artistName
+                    albumName = item.album.title
+                    isExplicit = false
+                }
+                is MusicBrowseItem.ArtistItem -> {
+                    id = item.artist.id
+                    title = item.artist.name
+                    artistId = item.artist.id
+                    artistName = item.artist.name
+                    albumName = ""
+                    isExplicit = false
+                }
+                is MusicBrowseItem.PlaylistItem -> {
+                    id = item.playlist.id
+                    title = item.playlist.title
+                    artistId = ""
+                    artistName = item.playlist.author ?: ""
+                    albumName = ""
+                    isExplicit = false
+                }
             }
 
-            val blockResult = filter.shouldBlockMusicContent(
-                trackId = id,
-                title = title,
-                artistId = "",
-                artistName = artistName,
-                albumName = albumName,
-                genre = null,
-                durationSeconds = 0L,
-                isExplicit = isExplicit.toBoolean()
-            )
-            !blockResult.isBlocked
+            // ALWAYS check global blocks first (regardless of family linking)
+            val textToCheck = "$title $artistName $albumName"
+            val globalKeywordBlock = remoteConfigManager.isGloballyBlocked(textToCheck)
+            if (globalKeywordBlock.isBlocked) {
+                Log.d(TAG, "Item '$title' blocked by global keyword filter")
+                return@filter false
+            }
+
+            val globalArtistBlock = remoteConfigManager.isArtistGloballyBlocked(artistId, artistName)
+            if (globalArtistBlock.isBlocked) {
+                Log.d(TAG, "Item '$title' by '$artistName' blocked by global artist filter")
+                return@filter false
+            }
+
+            // If linked to family, also apply family-specific rules
+            val filter = contentFilter
+            if (filter != null) {
+                val blockResult = filter.shouldBlockMusicContent(
+                    trackId = id,
+                    title = title,
+                    artistId = artistId,
+                    artistName = artistName,
+                    albumName = albumName,
+                    genre = null,
+                    durationSeconds = 0L,
+                    isExplicit = isExplicit
+                )
+                if (blockResult.isBlocked) {
+                    Log.d(TAG, "Item '$title' blocked by family filter: ${blockResult.reason}")
+                    return@filter false
+                }
+            }
+
+            true // Not blocked
         }
     }
 

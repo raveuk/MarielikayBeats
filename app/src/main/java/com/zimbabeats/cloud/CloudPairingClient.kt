@@ -260,7 +260,8 @@ class CloudPairingClient(
                             bedtimeStart = snapshot.getString("bedtimeStart"),
                             bedtimeEnd = snapshot.getString("bedtimeEnd"),
                             bedtimeEnabled = snapshot.getBoolean("bedtimeEnabled") ?: false,
-                            updatedAt = snapshot.getDate("updatedAt")
+                            updatedAt = snapshot.getDate("updatedAt"),
+                            pinHash = snapshot.getString("pinHash")
                         )
                         _cloudSettings.value = settings
                         Log.d(TAG, "Received settings update: $settings")
@@ -276,7 +277,8 @@ class CloudPairingClient(
                         bedtimeStart = null,
                         bedtimeEnd = null,
                         bedtimeEnabled = false,
-                        updatedAt = null
+                        updatedAt = null,
+                        pinHash = null
                     )
                 }
             }
@@ -401,6 +403,75 @@ class CloudPairingClient(
     fun isPaired(): Boolean = _pairingStatus.value is PairingStatus.Paired
 
     /**
+     * Verify PIN against cloud-stored hash.
+     * Returns true if PIN matches the stored hash.
+     */
+    fun verifyCloudPin(pin: String): Boolean {
+        val storedHash = _cloudSettings.value?.pinHash
+        if (storedHash.isNullOrEmpty()) {
+            Log.w(TAG, "No PIN hash stored in cloud settings")
+            return false
+        }
+
+        val inputHash = hashPin(pin)
+        val isValid = storedHash == inputHash
+        Log.d(TAG, "Cloud PIN verification: ${if (isValid) "SUCCESS" else "FAILED"}")
+        return isValid
+    }
+
+    /**
+     * Hash PIN using SHA-256 (same algorithm as Family app)
+     */
+    private fun hashPin(pin: String): String {
+        val bytes = java.security.MessageDigest.getInstance("SHA-256").digest(pin.toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Sync watch history entry to Firebase for parent to view.
+     * Called whenever a video is watched.
+     */
+    suspend fun syncWatchHistory(
+        videoId: String,
+        title: String,
+        channelName: String,
+        thumbnailUrl: String,
+        durationSeconds: Long
+    ) {
+        val status = _pairingStatus.value
+        if (status !is PairingStatus.Paired) {
+            Log.d(TAG, "Not paired - skipping watch history sync")
+            return
+        }
+
+        try {
+            val historyEntry = hashMapOf(
+                "contentType" to "video",
+                "videoId" to videoId,
+                "title" to title,
+                "channelName" to channelName,
+                "thumbnailUrl" to thumbnailUrl,
+                "durationSeconds" to durationSeconds,
+                "watchedAt" to Date(),
+                "deviceId" to status.deviceId,
+                "childName" to status.childName,
+                "wasBlocked" to false
+            )
+
+            firestore.collection(COLLECTION_FAMILIES)
+                .document(status.parentUid)
+                .collection("watch_history")
+                .document("${status.deviceId}_${videoId}_${System.currentTimeMillis()}")
+                .set(historyEntry)
+                .await()
+
+            Log.d(TAG, "Watch history synced: $title")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync watch history", e)
+        }
+    }
+
+    /**
      * Report a tampering attempt to the parent (e.g., trying to disable device admin).
      */
     suspend fun reportTamperingAttempt(message: String) {
@@ -517,5 +588,6 @@ data class CloudParentalSettings(
     val bedtimeStart: String?,
     val bedtimeEnd: String?,
     val bedtimeEnabled: Boolean,
-    val updatedAt: Date?
+    val updatedAt: Date?,
+    val pinHash: String? = null  // SHA-256 hash of parent PIN for cloud verification
 )

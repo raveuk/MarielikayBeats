@@ -254,20 +254,27 @@ class SettingsViewModel(
     }
 
     /**
-     * Opens the system equalizer for the current audio session
-     * Returns an Intent that should be started by the Activity
+     * Opens the system equalizer for the current audio session.
+     * Returns an Intent that should be started by the Activity.
+     * Now works even without active music playback by using session 0 (global).
      */
-    fun getEqualizerIntent(): Intent? {
+    fun getEqualizerIntent(): Intent {
         val audioSessionId = musicPlaybackManager.getAudioSessionId()
-        if (audioSessionId == 0) {
-            return null
-        }
+        // Use the actual session ID if available, otherwise use 0 (global equalizer)
+        val sessionToUse = if (audioSessionId > 0) audioSessionId else 0
 
         return Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
-            putExtra(AudioEffect.EXTRA_AUDIO_SESSION, audioSessionId)
+            putExtra(AudioEffect.EXTRA_AUDIO_SESSION, sessionToUse)
             putExtra(AudioEffect.EXTRA_PACKAGE_NAME, application.packageName)
             putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
         }
+    }
+
+    /**
+     * Check if music is currently playing (for UI hints)
+     */
+    fun isMusicPlaying(): Boolean {
+        return musicPlaybackManager.getAudioSessionId() > 0
     }
 
     // ==================== Media Storage ====================

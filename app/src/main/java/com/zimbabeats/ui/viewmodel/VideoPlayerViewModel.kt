@@ -67,7 +67,9 @@ data class VideoPlayerUiState(
     val selectedDownloadQuality: DownloadQualityOption? = null,
     // Related videos from same channel
     val relatedVideos: List<Video> = emptyList(),
-    val isLoadingRelated: Boolean = false
+    val isLoadingRelated: Boolean = false,
+    // Offline playback indicator
+    val isPlayingOffline: Boolean = false
 )
 
 class VideoPlayerViewModel(
@@ -158,7 +160,36 @@ class VideoPlayerViewModel(
                 Log.d(TAG, "Video info loaded: ${video.title}")
                 _uiState.value = _uiState.value.copy(video = video)
 
-                // Get stream URLs
+                // CHECK FOR DOWNLOADED CONTENT FIRST (Bug 8 fix - offline playback)
+                val localFilePath = downloadManager.getDownloadedFilePath(videoId)
+                if (localFilePath != null) {
+                    Log.d(TAG, "Playing from local downloaded file: $localFilePath")
+
+                    val localFileUri = "file://$localFilePath"
+                    _uiState.value = _uiState.value.copy(
+                        streamUrl = localFileUri,
+                        availableQualities = listOf(
+                            QualityOption(
+                                quality = "Downloaded",
+                                url = localFileUri,
+                                format = "mp4",
+                                isVideoOnly = false
+                            )
+                        ),
+                        currentQuality = "Downloaded",
+                        isLoading = false,
+                        isPlayingOffline = true,
+                        downloadState = DownloadButtonState.COMPLETED
+                    )
+
+                    player.playVideo(localFileUri, video.title)
+                    startWatchSession(videoId)
+                    saveWatchHistoryNow()
+                    loadRelatedVideos(video.channelId, videoId)
+                    return@launch
+                }
+
+                // Not downloaded - Get stream URLs from YouTube
                 try {
                     Log.d(TAG, "Fetching stream URLs...")
                     val streams = youTubeService.getStreamUrls(videoId)
@@ -226,7 +257,8 @@ class VideoPlayerViewModel(
                             streamUrl = bestStream.url,
                             availableQualities = qualityOptions,
                             currentQuality = if (hlsStream != null) "Auto (HLS)" else bestStream.quality,
-                            isLoading = false
+                            isLoading = false,
+                            isPlayingOffline = false
                         )
 
                         player.playVideo(bestStream.url, video.title)
@@ -246,10 +278,37 @@ class VideoPlayerViewModel(
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load video", e)
-                    _uiState.value = _uiState.value.copy(
-                        error = "Failed to load video: ${e.message}",
-                        isLoading = false
-                    )
+
+                    // If streaming failed, check if we have a download as fallback
+                    val fallbackPath = downloadManager.getDownloadedFilePath(videoId)
+                    if (fallbackPath != null) {
+                        Log.d(TAG, "Streaming failed, using downloaded file as fallback: $fallbackPath")
+                        val localFileUri = "file://$fallbackPath"
+                        _uiState.value = _uiState.value.copy(
+                            streamUrl = localFileUri,
+                            availableQualities = listOf(
+                                QualityOption(
+                                    quality = "Downloaded",
+                                    url = localFileUri,
+                                    format = "mp4",
+                                    isVideoOnly = false
+                                )
+                            ),
+                            currentQuality = "Downloaded",
+                            isLoading = false,
+                            isPlayingOffline = true,
+                            downloadState = DownloadButtonState.COMPLETED
+                        )
+                        player.playVideo(localFileUri, video.title)
+                        startWatchSession(videoId)
+                        saveWatchHistoryNow()
+                        loadRelatedVideos(video.channelId, videoId)
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            error = "Failed to load video: ${e.message}",
+                            isLoading = false
+                        )
+                    }
                 }
             } else {
                 Log.e(TAG, "Video not found in database")
@@ -600,6 +659,7 @@ class VideoPlayerViewModel(
         val video = _uiState.value.video ?: return
         viewModelScope.launch {
             try {
+                // Save locally
                 videoRepository.addToWatchHistory(
                     videoId = video.id,
                     watchDuration = 0,
@@ -607,6 +667,15 @@ class VideoPlayerViewModel(
                     profileId = null
                 )
                 Log.d(TAG, "Watch history saved for: ${video.id}")
+
+                // Sync to Firebase for parent to view
+                cloudPairingClient.syncWatchHistory(
+                    videoId = video.id,
+                    title = video.title,
+                    channelName = video.channelName,
+                    thumbnailUrl = video.thumbnailUrl,
+                    durationSeconds = video.duration
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to save watch history", e)
             }
