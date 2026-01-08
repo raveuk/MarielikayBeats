@@ -85,6 +85,17 @@ Timely reporting of issues is essential for maintaining application stability an
 | Search | Filtered search functionality with safe-search enforcement |
 | Music Integration | Full YouTube Music catalog access with dedicated player - Thanks to Youtube |
 
+### Playlist Sharing (New in v1.0.9)
+
+| Feature | Description |
+|---------|-------------|
+| Share Codes | Share playlists with friends using simple 6-character codes |
+| Import Playlists | Import shared playlists from friends with one tap |
+| Content Filtering | Blocked content automatically removed during import |
+| Expiry & Limits | Codes expire after 7 days with max 10 imports |
+| Parent Visibility | Parents can see shared playlists and who imported them |
+| Revoke Sharing | Parents can revoke share codes at any time |
+
 ### Global Content Filtering
 
 | Feature | Description |
@@ -142,7 +153,7 @@ Timely reporting of issues is essential for maintaining application stability an
 
 **License:** GNU General Public License v3.0 (Open Source)
 
-<a href="https://github.com/raveuk/ZimbaBeats/releases/download/v1.0.8/ZimbaBeats.apk">
+<a href="https://github.com/raveuk/ZimbaBeats/releases/download/v1.0.9/ZimbaBeats.apk">
   <img src="https://img.shields.io/badge/Download-ZimbaBeats-blue?style=for-the-badge&logo=android" alt="Download ZimbaBeats"/>
 </a>
 
@@ -150,7 +161,7 @@ Timely reporting of issues is essential for maintaining application stability an
 
 **License:** Proprietary - All Rights Reserved
 
-<a href="https://github.com/raveuk/ZimbaBeats/releases/download/v1.0.8/ZimbaBeats-Family.apk">
+<a href="https://github.com/raveuk/ZimbaBeats/releases/download/v1.0.9/ZimbaBeats-Family.apk">
   <img src="https://img.shields.io/badge/Download-ZimbaBeats%20Family-green?style=for-the-badge&logo=android" alt="Download ZimbaBeats Family"/>
 </a>
 
