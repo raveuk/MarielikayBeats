@@ -28,16 +28,21 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         initializePlayer()
         initializeMediaSession()
-        notificationManager = PlaybackNotificationManager(this, mediaSession!!)
 
-        // Configure notification with custom small icon
-        val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
-            .setChannelId(PlaybackNotificationManager.CHANNEL_ID)
-            .setChannelName(R.string.notification_channel_name)
-            .setNotificationId(PlaybackNotificationManager.NOTIFICATION_ID)
-            .build()
-        notificationProvider.setSmallIcon(R.drawable.ic_notification)
-        setMediaNotificationProvider(notificationProvider)
+        // Safely initialize notification manager only if mediaSession is available
+        val session = mediaSession
+        if (session != null) {
+            notificationManager = PlaybackNotificationManager(this, session)
+
+            // Configure notification with custom small icon
+            val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
+                .setChannelId(PlaybackNotificationManager.CHANNEL_ID)
+                .setChannelName(R.string.notification_channel_name)
+                .setNotificationId(PlaybackNotificationManager.NOTIFICATION_ID)
+                .build()
+            notificationProvider.setSmallIcon(R.drawable.ic_notification)
+            setMediaNotificationProvider(notificationProvider)
+        }
     }
 
     private fun initializePlayer() {

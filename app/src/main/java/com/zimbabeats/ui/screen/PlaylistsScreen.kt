@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,9 +23,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpOffset
 import com.zimbabeats.core.domain.model.Playlist
 import com.zimbabeats.core.domain.model.PlaylistColor
 import com.zimbabeats.ui.viewmodel.PlaylistViewModel
+import com.zimbabeats.ui.viewmodel.PlaylistSharingViewModel
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,10 +35,14 @@ import org.koin.androidx.compose.koinViewModel
 fun PlaylistsScreen(
     onNavigateBack: () -> Unit,
     onPlaylistClick: (Long) -> Unit,
-    viewModel: PlaylistViewModel = koinViewModel()
+    onNavigateToImport: () -> Unit,
+    viewModel: PlaylistViewModel = koinViewModel(),
+    sharingViewModel: PlaylistSharingViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    val isSharingEnabled by sharingViewModel.isSharingEnabled.collectAsState()
+    var showFabMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -48,8 +56,50 @@ fun PlaylistsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Default.Add, "Create Playlist")
+            Box {
+                FloatingActionButton(
+                    onClick = {
+                        if (isSharingEnabled) {
+                            showFabMenu = !showFabMenu
+                        } else {
+                            showCreateDialog = true
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = if (isSharingEnabled) Icons.Default.MoreVert else Icons.Default.Add,
+                        contentDescription = "Playlist Actions"
+                    )
+                }
+
+                if (isSharingEnabled) {
+                    DropdownMenu(
+                        expanded = showFabMenu,
+                        onDismissRequest = { showFabMenu = false },
+                        offset = DpOffset(x = (-12).dp, y = (-64).dp)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Create Playlist") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                            },
+                            onClick = {
+                                showCreateDialog = true
+                                showFabMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Import Playlist") },
+                            leadingIcon = {
+                                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null)
+                            },
+                            onClick = {
+                                onNavigateToImport()
+                                showFabMenu = false
+                            }
+                        )
+                    }
+                }
             }
         }
     ) { paddingValues ->

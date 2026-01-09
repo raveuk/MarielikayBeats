@@ -39,6 +39,9 @@ sealed class Screen {
     data class PlaylistDetail(val playlistId: Long) : Screen()
 
     @Serializable
+    data object ImportPlaylist : Screen()
+
+    @Serializable
     data object Settings : Screen()
 
     @Serializable

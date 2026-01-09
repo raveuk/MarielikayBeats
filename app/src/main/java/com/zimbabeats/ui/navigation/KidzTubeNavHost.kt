@@ -43,6 +43,7 @@ import com.zimbabeats.ui.screen.ParentalControlScreen
 import com.zimbabeats.ui.screen.ParentalDashboardScreen
 import com.zimbabeats.ui.screen.PlaylistDetailScreen
 import com.zimbabeats.ui.screen.PlaylistsScreen
+import com.zimbabeats.ui.screen.ImportPlaylistScreen
 import com.zimbabeats.ui.screen.SearchScreen
 import com.zimbabeats.ui.screen.SearchMode
 import com.zimbabeats.ui.screen.SettingsScreen
@@ -148,6 +149,23 @@ fun ZimbaBeatsNavHost(
                 },
                 onPlaylistClick = { playlistId ->
                     navController.navigate(Screen.PlaylistDetail(playlistId))
+                },
+                onNavigateToImport = {
+                    navController.navigate(Screen.ImportPlaylist)
+                }
+            )
+        }
+
+        // Import Playlist screen
+        composable<Screen.ImportPlaylist> {
+            ImportPlaylistScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onImportSuccess = { playlistId ->
+                    navController.navigate(Screen.PlaylistDetail(playlistId)) {
+                        popUpTo(Screen.ImportPlaylist) { inclusive = true }
+                    }
                 }
             )
         }

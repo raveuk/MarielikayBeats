@@ -187,9 +187,10 @@ class MainActivity : ComponentActivity() {
                             currentRoute?.contains("MusicPlayer") != true
 
                     // Show block screen if content is blocked
-                    if (showBlockScreen != null) {
+                    val currentBlockScreen = showBlockScreen
+                    if (currentBlockScreen != null) {
                         BlockScreen(
-                            blockReason = showBlockScreen!!,
+                            blockReason = currentBlockScreen,  // Local variable is non-null
                             onParentUnlock = {
                                 // Show PIN dialog for parent authentication
                                 pinError = null

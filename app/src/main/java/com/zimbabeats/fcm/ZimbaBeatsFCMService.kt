@@ -14,6 +14,7 @@ import com.zimbabeats.cloud.CloudPairingClient
 import com.zimbabeats.cloud.PairingStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
@@ -51,6 +52,12 @@ class ZimbaBeatsFCMService : FirebaseMessagingService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+    }
+
+    override fun onDestroy() {
+        // Cancel all coroutines to prevent memory leaks
+        serviceScope.cancel()
+        super.onDestroy()
     }
 
     /**
@@ -200,7 +207,7 @@ class ZimbaBeatsFCMService : FirebaseMessagingService() {
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID_PARENTAL)
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // TODO: Replace with app icon
+            .setSmallIcon(com.zimbabeats.R.mipmap.ic_launcher)  // App launcher icon
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
