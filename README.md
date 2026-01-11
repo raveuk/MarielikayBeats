@@ -4,7 +4,8 @@
 <h1 align="center">ZimbaBeats</h1>
 
 <p align="center">
-  <strong>Child-Safe YouTube for backend with Enterprise-Grade Parental Controls</strong>
+  <strong>Child-Safe YouTube for backend with Enterprise-Grade Parental Controls</strong><Br>
+   First conceptual stage. Looking for testers to contribute. Parents welcome and Individual Testers will be named here for showing support.
 </p>
 
 <p align="center">
@@ -378,6 +379,7 @@ ZimbaBeats is committed to protecting user privacy:
 <p align="center">
   <sub>Copyright 2025 ZimbaBeats. All rights reserved where applicable.</sub>
 </p>
+
 
 
 
