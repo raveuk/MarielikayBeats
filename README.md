@@ -20,6 +20,9 @@
   <a href="https://github.com/raveuk/ZimbaBeats/issues">
     <img src="https://img.shields.io/github/issues/raveuk/ZimbaBeats?style=flat-square" alt="Issues"/>
   </a>
+   <a href="https://github.com/raveuk/ZimbaBeats/blob/main/USER_GUIDE.md">
+    <img src="https://img.shields.io/badge/User_Guide-Setup Guide-blue?style=flat-Round" alt="User Guide"/>
+   </a>
 </p>
 
 ---
@@ -375,6 +378,7 @@ ZimbaBeats is committed to protecting user privacy:
 <p align="center">
   <sub>Copyright 2025 ZimbaBeats. All rights reserved where applicable.</sub>
 </p>
+
 
 
 
