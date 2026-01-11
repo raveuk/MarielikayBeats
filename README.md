@@ -102,6 +102,17 @@ Timely reporting of issues is essential for maintaining application stability an
 |---------|-------------|
 |  Global Filtering |  Dangerous or harmful content is blocked platform-wide by the ZimbaBeats team. No app update required - blocks apply instantly. |
 
+### Multi-Child Profiles (New in v1.0.12)
+
+| Feature | Description |
+|---------|-------------|
+| Multiple Children | Create individual profiles for each child in your family |
+| Per-Child Age Ratings | Set different age restrictions for each child (Under 5, Under 8, Under 13, etc.) |
+| Per-Child Content Filters | Customize video and music filters individually per child |
+| Device Assignment | Assign devices to specific child profiles |
+| Individual Settings | Screen time, bedtime, and content rules per child |
+| Easy Management | Unified "My Children" screen to manage all profiles and devices |
+
 ### Parental Control Features
 
 | Feature | Description |
@@ -109,7 +120,8 @@ Timely reporting of issues is essential for maintaining application stability an
 | Cloud Synchronization | Real-time settings synchronization between parent and child devices |
 | Screen Time Management | Configurable daily usage limits with automatic enforcement |
 | Bedtime Scheduling | Time-based access restrictions |
-| Age-Based Filtering | Content restriction based on age rating classifications |
+| Age-Based Filtering | Content restriction based on age rating classifications (per-child) |
+| Music Filtering | Age-appropriate music filtering synced from parent app |
 
 
 ### Premium Content Filtering
