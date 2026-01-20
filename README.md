@@ -327,6 +327,21 @@ ZimbaBeats is committed to protecting user privacy:
 </p>
 
 
+    <script>
+        let elm = document.getElementById("GFG");
+
+        function Fun_call() {
+            document.addEventListener("contextmenu",
+
+                function (e) {
+                    if (e.target.nodeName === "IMG") {
+                        e.preventDefault();
+                    }
+                }, false);
+
+            elm.innerHTML = "Right click disabled on image";
+        }       
+    </script>
 
 
 
