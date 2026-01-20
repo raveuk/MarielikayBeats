@@ -67,35 +67,31 @@ jobs:
             echo "VERSION=dev-$(date +%Y%m%d)" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+      - name: Create Release with APK
         if: startsWith(github.ref, 'refs/tags/')
-        with:
-          name: ZimbaBeats ${{ steps.get_version.outputs.VERSION }}
-          body: |
-            ## ZimbaBeats ${{ steps.get_version.outputs.VERSION }}
-
-            Safe, Ad-Free Music Streaming for Kids
-
-            ### Downloads
-            - **ZimbaBeats.apk** - Kids Music Player
-
-            ### Installation
-            1. Download ZimbaBeats.apk
-            2. Enable "Install from unknown sources" in Settings
-            3. Open the APK file to install
-
-            ### Requirements
-            - Android 8.0 or higher
-
-            ---
-            [Visit our website](https://zimbabeats.com) | [Web Player](https://zimbabeats.com/player)
-          files: |
-            ZimbaBeats.apk
-          draft: false
-          prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ steps.get_version.outputs.VERSION }} \
+            --title "ZimbaBeats ${{ steps.get_version.outputs.VERSION }}" \
+            --notes "## ZimbaBeats ${{ steps.get_version.outputs.VERSION }}
+
+          Safe, Ad-Free Music Streaming for Kids
+
+          ### Downloads
+          - **ZimbaBeats.apk** - Kids Music Player
+
+          ### Installation
+          1. Download ZimbaBeats.apk
+          2. Enable \"Install from unknown sources\" in Settings
+          3. Open the APK file to install
+
+          ### Requirements
+          - Android 8.0 or higher
+
+          ---
+          [Visit our website](https://zimbabeats.com) | [Web Player](https://zimbabeats.com/player)" \
+            ZimbaBeats.apk
 
       - name: Upload APK as artifact (for manual builds)
         uses: actions/upload-artifact@v4
