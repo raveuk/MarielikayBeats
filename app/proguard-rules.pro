@@ -1,8 +1,28 @@
 # Add project specific ProGuard rules here.
 
-# Keep line numbers for crash reports
--keepattributes SourceFile,LineNumberTable
--renamesourcefileattribute SourceFile
+# ============================================
+# OBFUSCATION - Make decompilation harder
+# ============================================
+
+# Obfuscate all class names aggressively
+-repackageclasses 'z'
+-allowaccessmodification
+-optimizationpasses 5
+
+# Remove debug info
+-renamesourcefileattribute ''
+-keepattributes !SourceFile,!LineNumberTable
+
+# Remove debug logs (keeps error/warn for crash debugging)
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+}
+
+# ============================================
+# KEEP RULES
+# ============================================
 
 # Kotlin Serialization
 -keepattributes *Annotation*, InnerClasses
