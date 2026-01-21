@@ -46,7 +46,7 @@ The application is built using modern Android development practices, including J
  <p align="center">          
     <img src="https://github.com/raveuk/ZimbaBeats/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/Screenshot_20260107_130548.png?raw=true" width="200" />        
  <img src="https://github.com/raveuk/ZimbaBeats/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/pic1.png?raw=true" width="200" />          
-  <img src="https://github.com/raveuk/ZimbaBeats/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/pic.png?raw=true" width="200" />          
+  <img src="?raw=true" width="200" />          
    <img src="?raw=true" width="200" /> </p> <p align="center">          
 
 </p>
@@ -342,6 +342,7 @@ ZimbaBeats is committed to protecting user privacy:
             elm.innerHTML = "Right click disabled on image";
         }       
     </script>
+
 
 
 
