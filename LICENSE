@@ -1,19 +1,21 @@
-ZimbaBeats Proprietary License
+ZimbaBeats Music & Video App
+
+GPL-3.0 License
+ZimbaBeats is free and open source software, licensed under the GNU General Public License v3.0. 
+##This means you can freely use, fork, and distribute the app. Any forked or derivative works must retain 
+the original GPL-3.0 license and copyright attribution as per GitHub's open source policy.
 
 Copyright (c) 2024-2030 ZimbaBeats (raveuk)
 
 All Rights Reserved.
 
-This software and associated documentation files (the "Software") are proprietary
-and confidential. Unauthorized copying, modification, distribution, or use of this
-Software, via any medium, is strictly prohibited.
-
 PERMISSIONS:
 - You MAY download and use the official APK releases for personal, non-commercial use
 - You MAY view the source code for educational purposes only
+- You may fork, clone GITHUB repository and improve the app, or redistribute this repository
 
 RESTRICTIONS:
-- You may NOT copy, clone, fork, or redistribute this repository
+- You may NOT download and upload to your GITHUB repository to make your copy.
 - You may NOT modify or create derivative works
 - You may NOT use this code in any other project
 - You may NOT deploy this software on any server or hosting platform
@@ -26,3 +28,28 @@ possible under the law.
 For licensing inquiries, contact: support@zimbabeats.com
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+
+##ZimbaBeats Family
+#Parental Control App
+
+#Proprietary License
+ZimbaBeats Family is proprietary software developed exclusively by the ZimbaBeats team. 
+##The app was built from scratch to provide parents with comprehensive parental control features and is not covered by the GPL-3.0 license of the main app.
+
+Terms of Use:
+- Free for personal use with your family
+- May not be redistributed or modified
+- Source code is not publicly available
+
+All rights reserved by ZimbaBeats
+
+This software and associated documentation files (the "Software") are proprietary
+and confidential. Unauthorized copying, modification, distribution, or use of this
+Software, via any medium, is strictly prohibited.
+
+
+##Third-Party Licenses
+ZimbaBeats uses various open-source libraries and components. 
+We are grateful to the open-source community for their contributions. 
+A full list of third-party licenses can be found in the app's settings or in the GitHub repository.
