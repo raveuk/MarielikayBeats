@@ -191,4 +191,17 @@ interface MusicRepository {
      * Check if a track is in a playlist
      */
     suspend fun isTrackInPlaylist(playlistId: Long, trackId: String): Boolean
+
+    // ==================== Authentication ====================
+
+    /**
+     * Set YouTube authentication cookie for better playback
+     * This enables authenticated requests to YouTube Music API
+     */
+    fun setYouTubeCookie(cookie: String)
+
+    /**
+     * Check if YouTube authentication is active
+     */
+    fun isYouTubeAuthenticated(): Boolean
 }

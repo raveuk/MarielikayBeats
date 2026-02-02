@@ -1,5 +1,6 @@
 ﻿package com.zimbabeats.core.data.di
 
+import com.zimbabeats.core.data.remote.youtube.NewPipeStreamExtractor
 import com.zimbabeats.core.data.remote.youtube.music.YouTubeMusicClient
 import com.zimbabeats.core.data.repository.music.MusicRepositoryImpl
 import com.zimbabeats.core.domain.repository.MusicRepository
@@ -10,8 +11,15 @@ import org.koin.dsl.module
  */
 val musicModule = module {
 
-    // YouTube Music API Client
-    single { YouTubeMusicClient(get()) }
+    // NewPipe Extractor for stream extraction (handles "n" parameter decryption)
+    single { NewPipeStreamExtractor() }
+
+    // YouTube Music API Client with NewPipe support
+    single {
+        YouTubeMusicClient(get()).apply {
+            newPipeExtractor = get()
+        }
+    }
 
     // Music Repository
     single<MusicRepository> {

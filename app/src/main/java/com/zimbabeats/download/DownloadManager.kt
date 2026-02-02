@@ -213,7 +213,7 @@ class DownloadManager(
             val request = Request.Builder()
                 .url(stream.url)
                 .head()
-                .header("User-Agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip")
+                .header("User-Agent", "com.google.android.youtube/21.03.36 (Linux; U; Android 14) gzip")
                 .build()
 
             val response = httpClient.newCall(request).execute()
@@ -264,7 +264,7 @@ class DownloadManager(
                             val request = Request.Builder()
                                 .url(stream.url)
                                 .head()
-                                .header("User-Agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip")
+                                .header("User-Agent", "com.google.android.youtube/21.03.36 (Linux; U; Android 14) gzip")
                                 .build()
 
                             val response = httpClient.newCall(request).execute()

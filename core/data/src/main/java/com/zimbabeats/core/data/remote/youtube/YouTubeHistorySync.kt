@@ -43,12 +43,12 @@ class YouTubeHistorySync(private val httpClient: HttpClient) {
                 putJsonObject("context") {
                     putJsonObject("client") {
                         put("clientName", "ANDROID")
-                        put("clientVersion", "19.09.37")
+                        put("clientVersion", "21.03.36")
                         put("hl", "en")
                         put("gl", "US")
-                        put("androidSdkVersion", 30)
+                        put("androidSdkVersion", 34)
                         put("osName", "Android")
-                        put("osVersion", "11")
+                        put("osVersion", "14")
                     }
                 }
                 put("videoId", videoId)
@@ -91,7 +91,7 @@ class YouTubeHistorySync(private val httpClient: HttpClient) {
                 putJsonObject("context") {
                     putJsonObject("client") {
                         put("clientName", "ANDROID")
-                        put("clientVersion", "19.09.37")
+                        put("clientVersion", "21.03.36")
                         put("hl", "en")
                         put("gl", "US")
                     }

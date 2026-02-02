@@ -74,6 +74,13 @@ dependencies {
     // HTML parsing for YouTube scraping
     implementation("org.jsoup:jsoup:1.18.1")
 
+    // NewPipe Extractor for YouTube stream extraction (handles n parameter decryption)
+    // Using v0.25.1 with protobuf exclusions to avoid Firebase conflicts
+    implementation(libs.newpipe.extractor) {
+        exclude(group = "com.google.protobuf", module = "protobuf-javalite")
+        exclude(group = "com.google.protobuf", module = "protobuf-java")
+    }
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

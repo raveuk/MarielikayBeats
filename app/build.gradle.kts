@@ -35,8 +35,8 @@ android {
         applicationId = "com.zimbabeats"
         minSdk = 24
         targetSdk = 36
-        versionCode = 35
-        versionName = "1.0.35"
+        versionCode = 37
+        versionName = "1.0.37"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -159,6 +159,11 @@ dependencies {
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.firebase.config.ktx)
     implementation(libs.play.services.auth)
+
+    // Google Sign-In with Credential Manager
+    implementation(libs.credentials)
+    implementation(libs.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)

@@ -33,6 +33,7 @@ import com.zimbabeats.data.DownloadNetworkPreference
 import com.zimbabeats.data.ThemeMode
 import com.zimbabeats.ui.accessibility.ContentDescriptions
 import com.zimbabeats.ui.util.WindowSizeUtil
+import com.zimbabeats.ui.components.YouTubeAccountDialog
 import com.zimbabeats.ui.viewmodel.SettingsViewModel
 import com.zimbabeats.update.DownloadState
 import com.zimbabeats.update.UpdateResult
@@ -43,6 +44,7 @@ import org.koin.androidx.compose.koinViewModel
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToParentalControls: () -> Unit,
+    onNavigateToYouTubeLogin: () -> Unit = {},  // Deprecated: now uses inline dialog
     viewModel: SettingsViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
@@ -65,6 +67,8 @@ fun SettingsScreen(
     var showImageCacheLimitDialog by remember { mutableStateOf(false) }
     // Family linking dialog
     var showFamilyCodeDialog by remember { mutableStateOf(false) }
+    // YouTube account dialog (combined login/logout)
+    var showYouTubeAccountDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -242,6 +246,30 @@ fun SettingsScreen(
                         onClick = { showFamilyCodeDialog = true }
                     )
                 }
+            }
+
+            // YouTube Account Section
+            item {
+                Text(
+                    text = "YouTube Account",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .padding(vertical = 8.dp)
+                        .semantics { heading() }
+                )
+            }
+
+            item {
+                SettingsItem(
+                    icon = if (uiState.isYouTubeLoggedIn) Icons.Default.AccountCircle else Icons.Default.MusicNote,
+                    title = if (uiState.isYouTubeLoggedIn) "YouTube Music Connected" else "Guest Mode",
+                    subtitle = if (uiState.isYouTubeLoggedIn)
+                        "Tap to manage your account"
+                    else
+                        "Streaming works great! Tap for options",
+                    onClick = { showYouTubeAccountDialog = true }
+                )
             }
 
             // Appearance Section
@@ -974,6 +1002,18 @@ fun SettingsScreen(
         if (uiState.isFamilyLinked && showFamilyCodeDialog) {
             showFamilyCodeDialog = false
         }
+    }
+
+    // YouTube Account dialog (combined login/logout)
+    if (showYouTubeAccountDialog) {
+        YouTubeAccountDialog(
+            isLoggedIn = uiState.isYouTubeLoggedIn,
+            onDismiss = { showYouTubeAccountDialog = false },
+            onSignOut = {
+                viewModel.signOutYouTube()
+                showYouTubeAccountDialog = false
+            }
+        )
     }
 }
 

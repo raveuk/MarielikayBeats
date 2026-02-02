@@ -59,7 +59,9 @@ data class SettingsUiState(
     // Family cloud sync state
     val isFamilyLinked: Boolean = false,
     val isLinkingFamily: Boolean = false,
-    val familyLinkingError: String? = null
+    val familyLinkingError: String? = null,
+    // YouTube account state
+    val isYouTubeLoggedIn: Boolean = false
 )
 
 class SettingsViewModel(
@@ -167,6 +169,13 @@ class SettingsViewModel(
         viewModelScope.launch {
             appPreferences.imageCacheLimitFlow.collect { limit ->
                 _uiState.value = _uiState.value.copy(imageCacheLimit = limit)
+            }
+        }
+
+        // YouTube login state
+        viewModelScope.launch {
+            appPreferences.youtubeLoggedInFlow.collect { loggedIn ->
+                _uiState.value = _uiState.value.copy(isYouTubeLoggedIn = loggedIn)
             }
         }
     }
@@ -555,5 +564,12 @@ class SettingsViewModel(
 
     fun clearFamilyLinkError() {
         _uiState.value = _uiState.value.copy(familyLinkingError = null)
+    }
+
+    // ==================== YouTube Account ====================
+
+    fun signOutYouTube() {
+        appPreferences.clearYouTubeAccount()
+        Toast.makeText(application, "Signed out of YouTube Music", Toast.LENGTH_SHORT).show()
     }
 }

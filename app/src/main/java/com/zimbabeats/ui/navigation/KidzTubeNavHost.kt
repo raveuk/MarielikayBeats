@@ -264,6 +264,7 @@ fun ZimbaBeatsNavHost(
                 onNavigateToParentalControls = {
                     navController.navigate(Screen.ParentalControl)
                 }
+                // YouTube login now uses inline dialog - no navigation needed
             )
         }
 

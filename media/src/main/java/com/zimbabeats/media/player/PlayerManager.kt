@@ -98,7 +98,7 @@ object PlayerManager {
 
         // Create data source factory
         val dataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip")
+            .setUserAgent("com.google.android.youtube/21.03.36 (Linux; U; Android 14) gzip")
             .setDefaultRequestProperties(mapOf(
                 "Accept-Language" to "en-US,en;q=0.9",
                 "Accept" to "*/*",

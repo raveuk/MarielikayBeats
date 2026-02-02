@@ -137,7 +137,7 @@ class DownloadWorker(
 
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip")
+                .header("User-Agent", "com.google.android.youtube/21.03.36 (Linux; U; Android 14) gzip")
                 .header("Accept", "*/*")
                 .header("Origin", "https://www.youtube.com")
                 .header("Referer", "https://www.youtube.com/")

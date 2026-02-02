@@ -84,3 +84,26 @@
 # Compose
 -keep class androidx.compose.** { *; }
 -dontwarn androidx.compose.**
+
+# ============================================
+# NEWPIPE EXTRACTOR
+# ============================================
+
+# NewPipe Extractor and its dependencies
+-keep class org.schabi.newpipe.extractor.** { *; }
+-dontwarn org.schabi.newpipe.extractor.**
+
+# Rhino JavaScript engine (used by NewPipe for YouTube cipher)
+-keep class org.mozilla.javascript.** { *; }
+-dontwarn org.mozilla.javascript.**
+-dontwarn java.beans.**
+-dontwarn javax.script.**
+
+# jsoup HTML parser
+-keep class org.jsoup.** { *; }
+-dontwarn org.jsoup.**
+-dontwarn com.google.re2j.**
+
+# Gson (used by NewPipe)
+-keep class com.google.gson.** { *; }
+-dontwarn com.google.gson.**

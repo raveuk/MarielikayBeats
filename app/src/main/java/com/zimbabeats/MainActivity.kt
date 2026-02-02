@@ -28,6 +28,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.zimbabeats.bridge.ParentalControlBridge
 import com.zimbabeats.cloud.CloudPairingClient
+import com.zimbabeats.core.domain.repository.MusicRepository
 import com.zimbabeats.data.AppPreferences
 import com.zimbabeats.data.ThemeMode
 import com.zimbabeats.ui.screen.BlockReason
@@ -51,6 +52,7 @@ class MainActivity : ComponentActivity() {
     private val appPreferences: AppPreferences by inject()
     private val parentalControlBridge: ParentalControlBridge by inject()
     private val cloudPairingClient: CloudPairingClient by inject()
+    private val musicRepository: MusicRepository by inject()
 
     @androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -114,6 +116,14 @@ class MainActivity : ComponentActivity() {
                         delay(60_000L) // 1 minute
                         parentalControlBridge.tick()
                     }
+                }
+            }
+
+            // Sync YouTube cookie to MusicRepository for authenticated playback
+            val youtubeCookie by appPreferences.youtubeCookieFlow.collectAsState()
+            LaunchedEffect(youtubeCookie) {
+                if (youtubeCookie.isNotEmpty()) {
+                    musicRepository.setYouTubeCookie(youtubeCookie)
                 }
             }
 

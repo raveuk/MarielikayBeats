@@ -93,7 +93,7 @@ class VideoDownloadWorker(
             val connection = url.openConnection() as HttpURLConnection
             connection.apply {
                 requestMethod = "GET"
-                setRequestProperty("User-Agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip")
+                setRequestProperty("User-Agent", "com.google.android.youtube/21.03.36 (Linux; U; Android 14) gzip")
                 setRequestProperty("Accept", "*/*")
                 setRequestProperty("Origin", "https://www.youtube.com")
                 setRequestProperty("Referer", "https://www.youtube.com/")

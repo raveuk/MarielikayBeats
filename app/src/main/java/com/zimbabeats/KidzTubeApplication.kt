@@ -14,6 +14,8 @@ import com.zimbabeats.bridge.ParentalControlBridge
 import com.zimbabeats.cloud.CloudPairingClient
 import com.zimbabeats.cloud.RemoteConfigManager
 import com.zimbabeats.core.data.di.getDataModules
+import com.zimbabeats.core.data.remote.youtube.NewPipeStreamExtractor
+import com.zimbabeats.core.domain.repository.MusicRepository
 import com.zimbabeats.core.domain.repository.VideoRepository
 import com.zimbabeats.data.AppPreferences
 import com.zimbabeats.di.appModule
@@ -77,6 +79,12 @@ class ZimbaBeatsApplication : Application(), SingletonImageLoader.Factory {
 
             // Initialize cloud sync if previously paired
             initializeCloudSync()
+
+            // Initialize YouTube authentication (auto-login if cookies exist)
+            initializeYouTubeAuth()
+
+            // Initialize NewPipe Extractor for stream extraction (handles n-parameter decryption)
+            initializeNewPipeExtractor()
 
             // Clean up any cached dummy videos from old development builds
             cleanupDummyVideos()
@@ -182,6 +190,64 @@ class ZimbaBeatsApplication : Application(), SingletonImageLoader.Factory {
             }
         } catch (e: Exception) {
             android.util.Log.e("ZimbaBeats", "Failed to initialize cloud sync", e)
+        }
+    }
+
+    /**
+     * Initialize NewPipe Extractor for YouTube stream extraction.
+     * This handles the critical "n" parameter decryption that YouTube uses
+     * to throttle/block stream access.
+     *
+     * Based on how SimpMusic handles stream extraction.
+     */
+    private fun initializeNewPipeExtractor() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                android.util.Log.d("ZimbaBeats", "Initializing NewPipe extractor...")
+                val newPipeExtractor: NewPipeStreamExtractor = get()
+                val initialized = newPipeExtractor.initialize()
+                if (initialized) {
+                    android.util.Log.d("ZimbaBeats", "NewPipe extractor initialized successfully")
+                } else {
+                    android.util.Log.w("ZimbaBeats", "NewPipe extractor initialization failed - will use fallback methods")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ZimbaBeats", "Failed to initialize NewPipe extractor", e)
+            }
+        }
+    }
+
+    /**
+     * Initialize YouTube authentication on app startup.
+     * If user previously logged in, their cookies are automatically loaded
+     * and applied to the music client for authenticated requests.
+     *
+     * This enables "automatic sign-in" - users only need to log in once,
+     * and their session persists across app restarts.
+     */
+    private fun initializeYouTubeAuth() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val appPreferences: AppPreferences = get()
+                val musicRepository: MusicRepository = get()
+
+                // Small delay to ensure DataStore has loaded
+                kotlinx.coroutines.delay(200)
+
+                // Check if user has saved YouTube cookies
+                val cookie = appPreferences.getYouTubeCookie()
+                val isLoggedIn = appPreferences.isYouTubeLoggedIn()
+
+                if (isLoggedIn && cookie.isNotEmpty()) {
+                    // Apply saved cookies to music client for authenticated requests
+                    musicRepository.setYouTubeCookie(cookie)
+                    android.util.Log.d("ZimbaBeats", "YouTube authentication restored - user is signed in")
+                } else {
+                    android.util.Log.d("ZimbaBeats", "No YouTube session found - using unauthenticated mode")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ZimbaBeats", "Failed to initialize YouTube auth", e)
+            }
         }
     }
 

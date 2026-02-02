@@ -24,14 +24,14 @@ class InnertubeClient(private val httpClient: HttpClient) {
 
         // Use ANDROID client for stream URLs (more reliable for direct playback)
         private const val PLAYER_CLIENT_NAME = "ANDROID"
-        private const val PLAYER_CLIENT_VERSION = "19.09.37"
-        private const val ANDROID_SDK_VERSION = 30
-        private const val ANDROID_OS_VERSION = "11"
+        private const val PLAYER_CLIENT_VERSION = "21.03.36"
+        private const val ANDROID_SDK_VERSION = 34
+        private const val ANDROID_OS_VERSION = "14"
 
         // Use WEB client for search (WEB_KIDS no longer works - returns 400 errors)
         // Safety mode is controlled via user.enableSafetyMode in context
         private const val SEARCH_CLIENT_NAME = "WEB"
-        private const val SEARCH_CLIENT_VERSION = "2.20250222.10.00" // Updated version
+        private const val SEARCH_CLIENT_VERSION = "2.20260120.01.00" // Updated version
     }
 
     // Flag to enable kid-safe mode

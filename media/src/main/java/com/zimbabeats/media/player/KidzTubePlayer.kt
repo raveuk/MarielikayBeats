@@ -117,7 +117,7 @@ class ZimbaBeatsPlayer(private val context: Context) {
             // Create data source factory with Android YouTube Music headers for network streams
             // This matches the ANDROID_MUSIC client used to get the stream URLs
             val networkDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("com.google.android.apps.youtube.music/6.42.52 (Linux; U; Android 14) gzip")
+                .setUserAgent("com.google.android.apps.youtube.music/7.03.52 (Linux; U; Android 14) gzip")
                 .setDefaultRequestProperties(mapOf(
                     "Accept" to "*/*",
                     "Accept-Encoding" to "identity;q=1, *;q=0",
@@ -166,7 +166,7 @@ class ZimbaBeatsPlayer(private val context: Context) {
 
         // Create data source factory with Android YouTube Music headers
         val dataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("com.google.android.apps.youtube.music/6.42.52 (Linux; U; Android 14) gzip")
+            .setUserAgent("com.google.android.apps.youtube.music/7.03.52 (Linux; U; Android 14) gzip")
             .setDefaultRequestProperties(mapOf(
                 "Accept" to "*/*",
                 "Accept-Encoding" to "identity;q=1, *;q=0",

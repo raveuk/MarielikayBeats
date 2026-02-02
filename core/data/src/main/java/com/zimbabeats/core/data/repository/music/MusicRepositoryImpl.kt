@@ -422,4 +422,15 @@ class MusicRepositoryImpl(
             false
         }
     }
+
+    // ==================== Authentication ====================
+
+    override fun setYouTubeCookie(cookie: String) {
+        Log.d(TAG, "Setting YouTube cookie (length: ${cookie.length})")
+        musicClient.cookie = cookie
+    }
+
+    override fun isYouTubeAuthenticated(): Boolean {
+        return musicClient.isAuthenticated
+    }
 }

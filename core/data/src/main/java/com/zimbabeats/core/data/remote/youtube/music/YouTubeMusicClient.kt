@@ -1,6 +1,7 @@
 ﻿package com.zimbabeats.core.data.remote.youtube.music
 
 import android.util.Log
+import com.zimbabeats.core.data.remote.youtube.NewPipeStreamExtractor
 import com.zimbabeats.core.domain.model.music.*
 import io.ktor.client.*
 import io.ktor.client.request.*
@@ -9,21 +10,39 @@ import io.ktor.http.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
+import java.security.MessageDigest
 
 /**
  * YouTube Music Innertube API client
  * Uses the WEB_REMIX client (YouTube Music web client) for music-specific content
+ * Supports authenticated requests with YouTube cookies for better stream access
+ *
+ * Stream extraction priority:
+ * 1. yt-dlp (handles "n" parameter decryption locally)
+ * 2. Authenticated Innertube (if logged in)
+ * 3. Piped API
+ * 4. Invidious API
+ * 5. Unauthenticated Innertube
  */
 class YouTubeMusicClient(private val httpClient: HttpClient) {
+
+    /**
+     * NewPipe extractor for reliable stream extraction.
+     * Handles "n" parameter decryption that YouTube requires.
+     */
+    var newPipeExtractor: NewPipeStreamExtractor? = null
 
     companion object {
         private const val TAG = "YouTubeMusicClient"
         private const val INNERTUBE_BASE_URL = "https://music.youtube.com/youtubei/v1"
         private const val INNERTUBE_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
 
+        // Firebase Cloud Function for stream extraction (handles n-parameter decryption)
+        private const val FIREBASE_FUNCTION_URL = "https://us-central1-zimba-beats.cloudfunctions.net/getAudioStream"
+
         // WEB_REMIX client for YouTube Music
         private const val CLIENT_NAME = "WEB_REMIX"
-        private const val CLIENT_VERSION = "1.20231204.01.00"
+        private const val CLIENT_VERSION = "1.20260121.03.00"
 
         // Browse IDs for YouTube Music sections
         private const val BROWSE_ID_HOME = "FEmusic_home"
@@ -31,6 +50,70 @@ class YouTubeMusicClient(private val httpClient: HttpClient) {
     }
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    /**
+     * YouTube cookies for authenticated requests
+     * Set from AppPreferences when user is logged in
+     */
+    var cookie: String = ""
+        set(value) {
+            field = value
+            _sapisid = extractSapisid(value)
+            Log.d(TAG, "Cookie updated, SAPISID present: ${_sapisid != null}")
+        }
+
+    private var _sapisid: String? = null
+
+    /**
+     * Check if authenticated requests are available
+     */
+    val isAuthenticated: Boolean
+        get() = _sapisid != null
+
+    /**
+     * Extract SAPISID from cookie string for authentication header
+     */
+    private fun extractSapisid(cookieString: String): String? {
+        if (cookieString.isEmpty()) return null
+
+        return cookieString.split(";")
+            .map { it.trim() }
+            .find { it.startsWith("SAPISID=") || it.startsWith("__Secure-3PAPISID=") }
+            ?.split("=")
+            ?.getOrNull(1)
+    }
+
+    /**
+     * Generate SAPISIDHASH for YouTube Music API authentication
+     * Format: SAPISIDHASH {timestamp}_{sha1(timestamp + " " + SAPISID + " " + origin)}
+     */
+    private fun generateSapisidHash(origin: String = "https://music.youtube.com"): String? {
+        val sapisid = _sapisid ?: return null
+        val timestamp = System.currentTimeMillis() / 1000
+        val data = "$timestamp $sapisid $origin"
+
+        return try {
+            val md = MessageDigest.getInstance("SHA-1")
+            val digest = md.digest(data.toByteArray())
+            val hash = digest.joinToString("") { "%02x".format(it) }
+            "SAPISIDHASH ${timestamp}_$hash"
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate SAPISIDHASH", e)
+            null
+        }
+    }
+
+    /**
+     * Apply authentication headers to request builder if logged in
+     */
+    private fun HttpRequestBuilder.applyAuthHeaders(origin: String = "https://music.youtube.com") {
+        if (cookie.isNotEmpty()) {
+            header("Cookie", cookie)
+            generateSapisidHash(origin)?.let {
+                header("Authorization", it)
+            }
+        }
+    }
 
     /**
      * Build the context object for YouTube Music API requests
@@ -282,24 +365,59 @@ class YouTubeMusicClient(private val httpClient: HttpClient) {
 
     /**
      * Get audio stream URL and track details for a video/track
-     * Tries multiple sources in order of reliability
+     *
+     * Priority order:
+     * 1. NewPipe Extractor (handles "n" parameter decryption locally - most reliable)
+     * 2. Authenticated Innertube (if logged in)
+     * 3. Piped API
+     * 4. Invidious API
+     * 5. Unauthenticated Innertube - last resort
      */
     suspend fun getPlayerData(videoId: String): PlayerResult? = withContext(Dispatchers.IO) {
-        Log.d(TAG, "=== Getting player data for: $videoId ===")
+        Log.d(TAG, "=== Getting player data for: $videoId (authenticated: $isAuthenticated) ===")
 
-        // Try YouTube innertube API FIRST (fastest and most reliable)
-        try {
-            Log.d(TAG, "Trying YouTube innertube...")
-            val innertubeResult = getPlayerDataFromInnertube(videoId)
-            if (innertubeResult != null) {
-                Log.d(TAG, "SUCCESS: Got player data from innertube: ${innertubeResult.track.title}")
-                return@withContext innertubeResult
+        // PRIORITY 1: NewPipe Extractor (most reliable - handles n-parameter decryption locally)
+        newPipeExtractor?.let { extractor ->
+            try {
+                Log.d(TAG, "Trying NewPipe Extractor first (handles n-parameter decryption)...")
+                val result = extractor.extractAudioStream(videoId)
+                if (result != null) {
+                    val (streamUrl, track) = extractor.toPlayerResult(result, videoId)
+                    Log.d(TAG, "SUCCESS: Got player data from NewPipe: ${track.title}")
+                    return@withContext PlayerResult(streamUrl, track)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "NewPipe extraction failed: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Innertube API failed: ${e.message}")
+        } ?: Log.d(TAG, "NewPipe extractor not available, skipping...")
+
+        // PRIORITY 2: If logged in, try authenticated Innertube
+        if (isAuthenticated) {
+            try {
+                Log.d(TAG, "Trying AUTHENTICATED innertube...")
+                val authResult = getPlayerDataFromAuthenticatedInnertube(videoId)
+                if (authResult != null) {
+                    Log.d(TAG, "SUCCESS: Got player data from authenticated innertube: ${authResult.track.title}")
+                    return@withContext authResult
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Authenticated innertube failed: ${e.message}")
+            }
         }
 
-        // Fallback to Invidious API (often slow/unavailable)
+        // PRIORITY 3: Try Piped API - it handles "n" parameter decryption
+        try {
+            Log.d(TAG, "Trying Piped API...")
+            val pipedResult = getPlayerDataFromPipedApi(videoId)
+            if (pipedResult != null) {
+                Log.d(TAG, "SUCCESS: Got player data from Piped: ${pipedResult.track.title}")
+                return@withContext pipedResult
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Piped API failed: ${e.message}")
+        }
+
+        // PRIORITY 4: Fallback to Invidious API
         try {
             Log.d(TAG, "Trying Invidious API as fallback...")
             val invidiousResult = getPlayerDataFromPiped(videoId)
@@ -311,16 +429,16 @@ class YouTubeMusicClient(private val httpClient: HttpClient) {
             Log.w(TAG, "Invidious API failed: ${e.message}")
         }
 
-        // Last resort: Piped API
+        // PRIORITY 5: Last resort - unauthenticated YouTube innertube API
         try {
-            Log.d(TAG, "Trying Piped API as last resort...")
-            val pipedResult = getPlayerDataFromPipedApi(videoId)
-            if (pipedResult != null) {
-                Log.d(TAG, "SUCCESS: Got player data from Piped: ${pipedResult.track.title}")
-                return@withContext pipedResult
+            Log.d(TAG, "Trying YouTube innertube as last resort...")
+            val innertubeResult = getPlayerDataFromInnertube(videoId)
+            if (innertubeResult != null) {
+                Log.d(TAG, "SUCCESS: Got player data from innertube: ${innertubeResult.track.title}")
+                return@withContext innertubeResult
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Piped API failed: ${e.message}")
+            Log.w(TAG, "Innertube API failed: ${e.message}")
         }
 
         Log.e(TAG, "=== All sources failed for: $videoId ===")
@@ -328,15 +446,128 @@ class YouTubeMusicClient(private val httpClient: HttpClient) {
     }
 
     /**
+     * Get player data from Firebase Cloud Function.
+     * This is the most reliable method as it handles the "n" parameter decryption server-side.
+     */
+    private suspend fun getPlayerDataFromFirebase(videoId: String): PlayerResult? {
+        try {
+            Log.d(TAG, "Calling Firebase function for: $videoId")
+
+            val response: String = httpClient.get("$FIREBASE_FUNCTION_URL?videoId=$videoId") {
+                header("Accept", "application/json")
+            }.bodyAsText()
+
+            val jsonResponse = json.parseToJsonElement(response).jsonObject
+
+            val success = jsonResponse["success"]?.jsonPrimitive?.booleanOrNull ?: false
+            if (!success) {
+                val error = jsonResponse["error"]?.jsonPrimitive?.contentOrNull ?: "Unknown error"
+                Log.w(TAG, "Firebase returned error: $error")
+                return null
+            }
+
+            val audioUrl = jsonResponse["audioUrl"]?.jsonPrimitive?.contentOrNull
+            val title = jsonResponse["title"]?.jsonPrimitive?.contentOrNull ?: "Unknown Title"
+            val author = jsonResponse["author"]?.jsonPrimitive?.contentOrNull ?: "Unknown Artist"
+            val durationSeconds = jsonResponse["duration"]?.jsonPrimitive?.intOrNull ?: 0
+            val thumbnail = jsonResponse["thumbnail"]?.jsonPrimitive?.contentOrNull
+
+            if (audioUrl.isNullOrEmpty()) {
+                Log.w(TAG, "Firebase returned no audio URL")
+                return null
+            }
+
+            Log.d(TAG, "Firebase success: $title by $author")
+
+            val track = Track(
+                id = videoId,
+                title = title,
+                artistName = author,
+                artistId = null,
+                albumName = null,
+                albumId = null,
+                thumbnailUrl = thumbnail ?: "https://i.ytimg.com/vi/$videoId/mqdefault.jpg",
+                duration = durationSeconds * 1000L, // Convert to milliseconds
+                isExplicit = false
+            )
+
+            return PlayerResult(
+                streamUrl = audioUrl,
+                track = track
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Firebase request failed: ${e.message}", e)
+            return null
+        }
+    }
+
+    /**
+     * Get player data using AUTHENTICATED Innertube API
+     * This uses the user's cookies for authenticated requests which can bypass
+     * some YouTube restrictions and potentially avoid the "n" parameter issue
+     */
+    private suspend fun getPlayerDataFromAuthenticatedInnertube(videoId: String): PlayerResult? {
+        try {
+            Log.d(TAG, "Making authenticated player request for: $videoId")
+
+            val requestBody = buildJsonObject {
+                putJsonObject("context") {
+                    putJsonObject("client") {
+                        put("clientName", "WEB_REMIX")
+                        put("clientVersion", CLIENT_VERSION)
+                        put("hl", "en")
+                        put("gl", "US")
+                        put("platform", "DESKTOP")
+                        put("userAgent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    }
+                }
+                put("videoId", videoId)
+                put("contentCheckOk", true)
+                put("racyCheckOk", true)
+            }
+
+            val response: String = httpClient.post("$INNERTUBE_BASE_URL/player?key=$INNERTUBE_KEY") {
+                contentType(ContentType.Application.Json)
+                header("Origin", "https://music.youtube.com")
+                header("Referer", "https://music.youtube.com/")
+                header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                header("X-YouTube-Client-Name", "67")  // WEB_REMIX client number
+                header("X-YouTube-Client-Version", CLIENT_VERSION)
+                applyAuthHeaders()
+                setBody(requestBody.toString())
+            }.bodyAsText()
+
+            return parseInnertubeResponse(response, videoId, "WEB_REMIX_AUTH")
+        } catch (e: Exception) {
+            Log.w(TAG, "Authenticated WEB_REMIX failed: ${e.message}")
+            return null
+        }
+    }
+
+    /**
      * Get player data from Piped API instances
+     * Piped handles "n" parameter decryption which is required for YouTube streams
      */
     private suspend fun getPlayerDataFromPipedApi(videoId: String): PlayerResult? {
-        // Use full URLs to avoid string interpolation issues
+        // Multiple Piped instances for reliability (updated Feb 2026)
+        // These handle the "n" parameter decryption that YouTube requires
+        // Source: https://github.com/TeamPiped/documentation/blob/main/content/docs/public-instances/index.md
         val pipedUrls = listOf(
+            "https://api.piped.private.coffee/streams/$videoId",    // 100% uptime
             "https://pipedapi.kavin.rocks/streams/$videoId",
+            "https://pipedapi.leptons.xyz/streams/$videoId",
+            "https://pipedapi.nosebs.ru/streams/$videoId",
+            "https://pipedapi-libre.kavin.rocks/streams/$videoId",
+            "https://piped-api.privacy.com.de/streams/$videoId",
             "https://pipedapi.adminforge.de/streams/$videoId",
-            "https://watchapi.whatever.social/streams/$videoId",
-            "https://pipedapi.in.projectsegfau.lt/streams/$videoId"
+            "https://api.piped.yt/streams/$videoId",
+            "https://pipedapi.drgns.space/streams/$videoId",
+            "https://pipedapi.owo.si/streams/$videoId",
+            "https://pipedapi.ducks.party/streams/$videoId",
+            "https://piped-api.codespace.cz/streams/$videoId",
+            "https://pipedapi.reallyaweso.me/streams/$videoId",
+            "https://pipedapi.darkness.services/streams/$videoId",
+            "https://pipedapi.orangenet.cc/streams/$videoId"
         )
 
         for (url in pipedUrls) {
@@ -501,25 +732,144 @@ class YouTubeMusicClient(private val httpClient: HttpClient) {
 
     /**
      * Get player data from YouTube innertube API (fallback)
-     * Tries multiple client types for best compatibility
+     * WEB_SAFARI tried FIRST - its HLS streams don't require "n" parameter decryption
+     * Other clients tried as fallback but may get 403 errors without n-param decryption
      */
     private suspend fun getPlayerDataFromInnertube(videoId: String): PlayerResult? {
-        // Try ANDROID_MUSIC client first - most compatible with Android playback
-        val androidMusicResult = tryAndroidMusicClient(videoId)
-        if (androidMusicResult != null) return androidMusicResult
+        // Try WEB_SAFARI FIRST - HLS streams don't require "n" parameter decryption!
+        // This is the key insight from yt-dlp: web_safari m3u8 formats bypass throttling
+        Log.d(TAG, "Trying WEB_SAFARI client first (HLS bypasses n-param): $videoId")
+        val safariResult = tryWebSafariClient(videoId)
+        if (safariResult != null) {
+            Log.d(TAG, "WEB_SAFARI client succeeded with HLS stream!")
+            return safariResult
+        }
 
-        // Try Android client
-        val androidResult = tryInnertubeClient(videoId, "ANDROID", "19.44.38", null)
-        if (androidResult != null) return androidResult
+        // Try iOS client - sometimes works
+        Log.d(TAG, "Safari failed, trying iOS client")
+        val iosResult = tryInnertubeClient(videoId, "IOS", "21.03.2", "18.7.2.22H124")
+        if (iosResult != null) {
+            Log.d(TAG, "iOS client succeeded!")
+            return iosResult
+        }
 
-        // Try TV embed client as last resort (usually less restrictive)
+        // Try TV embed client
+        Log.d(TAG, "iOS failed, trying TV embed client")
         val tvResult = tryTvEmbedClient(videoId)
-        if (tvResult != null) return tvResult
+        if (tvResult != null) {
+            Log.d(TAG, "TV client succeeded!")
+            return tvResult
+        }
 
-        // Try iOS client (least compatible on Android devices)
-        val iosResult = tryInnertubeClient(videoId, "IOS", "19.45.4", "18.1.0.22D68")
-        if (iosResult != null) return iosResult
+        // Try ANDROID_MUSIC client
+        Log.d(TAG, "TV failed, trying ANDROID_MUSIC client")
+        val androidMusicResult = tryAndroidMusicClient(videoId)
+        if (androidMusicResult != null) {
+            Log.d(TAG, "ANDROID_MUSIC client succeeded!")
+            return androidMusicResult
+        }
 
+        // Try Android client as last resort
+        Log.d(TAG, "ANDROID_MUSIC failed, trying ANDROID client")
+        val androidResult = tryInnertubeClient(videoId, "ANDROID", "21.03.36", null)
+        if (androidResult != null) {
+            Log.d(TAG, "ANDROID client succeeded!")
+            return androidResult
+        }
+
+        Log.e(TAG, "All innertube clients failed for: $videoId")
+        return null
+    }
+
+    /**
+     * Try WEB_SAFARI client - returns HLS m3u8 streams that DON'T require "n" parameter decryption
+     * This is based on yt-dlp's finding that web_safari m3u8 formats bypass throttling
+     */
+    private suspend fun tryWebSafariClient(videoId: String): PlayerResult? {
+        try {
+            val requestBody = buildJsonObject {
+                putJsonObject("context") {
+                    putJsonObject("client") {
+                        put("clientName", "WEB")
+                        put("clientVersion", "2.20260131.00.00")
+                        put("hl", "en")
+                        put("gl", "US")
+                        put("userAgent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15")
+                    }
+                }
+                put("videoId", videoId)
+                put("contentCheckOk", true)
+                put("racyCheckOk", true)
+            }
+
+            val response: String = httpClient.post("https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8") {
+                contentType(ContentType.Application.Json)
+                header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15")
+                header("Origin", "https://www.youtube.com")
+                header("Referer", "https://www.youtube.com/")
+                setBody(requestBody.toString())
+            }.bodyAsText()
+
+            // Parse specifically looking for HLS manifest (that's what we want from Safari)
+            return parseWebSafariResponse(response, videoId)
+        } catch (e: Exception) {
+            Log.w(TAG, "WEB_SAFARI client failed: ${e.message}")
+            return null
+        }
+    }
+
+    /**
+     * Parse WEB_SAFARI response - prioritize HLS manifest over adaptive formats
+     * HLS streams from Safari don't need "n" parameter decryption
+     */
+    private fun parseWebSafariResponse(response: String, videoId: String): PlayerResult? {
+        val jsonElement = json.parseToJsonElement(response)
+        val jsonObject = jsonElement.jsonObject
+
+        // Check playability
+        val playabilityStatus = jsonObject["playabilityStatus"]?.jsonObject
+        val status = playabilityStatus?.get("status")?.jsonPrimitive?.contentOrNull
+        val reason = playabilityStatus?.get("reason")?.jsonPrimitive?.contentOrNull
+
+        if (status != "OK") {
+            Log.w(TAG, "WEB_SAFARI playability: $status - $reason")
+            return null
+        }
+
+        // Get video details
+        val videoDetails = jsonObject["videoDetails"]?.jsonObject
+        val title = videoDetails?.get("title")?.jsonPrimitive?.contentOrNull ?: "Unknown"
+        val author = videoDetails?.get("author")?.jsonPrimitive?.contentOrNull ?: "Unknown Artist"
+        val channelId = videoDetails?.get("channelId")?.jsonPrimitive?.contentOrNull
+        val lengthSeconds = videoDetails?.get("lengthSeconds")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+        val thumbnails = videoDetails?.get("thumbnail")?.jsonObject
+            ?.get("thumbnails")?.jsonArray
+        val thumbnailUrl = thumbnails?.lastOrNull()?.jsonObject
+            ?.get("url")?.jsonPrimitive?.contentOrNull ?: ""
+
+        val track = Track(
+            id = videoId,
+            title = title,
+            artistName = author,
+            artistId = channelId,
+            albumName = null,
+            albumId = null,
+            thumbnailUrl = thumbnailUrl,
+            duration = lengthSeconds * 1000
+        )
+
+        // Get streaming data
+        val streamingData = jsonObject["streamingData"]?.jsonObject
+            ?: return null
+
+        // PRIORITIZE HLS manifest - this is the key to bypassing "n" parameter!
+        // HLS streams from WEB client don't require JavaScript decryption
+        streamingData["hlsManifestUrl"]?.jsonPrimitive?.contentOrNull?.let { hlsUrl ->
+            Log.d(TAG, "WEB_SAFARI: Found HLS manifest (no n-param needed): ${hlsUrl.take(80)}...")
+            return PlayerResult(hlsUrl, track)
+        }
+
+        Log.w(TAG, "WEB_SAFARI: No HLS manifest found")
         return null
     }
 
@@ -534,7 +884,7 @@ class YouTubeMusicClient(private val httpClient: HttpClient) {
                 putJsonObject("context") {
                     putJsonObject("client") {
                         put("clientName", "ANDROID_MUSIC")
-                        put("clientVersion", "6.42.52")
+                        put("clientVersion", "7.03.52")
                         put("androidSdkVersion", 34)
                         put("hl", "en")
                         put("gl", "US")
@@ -550,10 +900,10 @@ class YouTubeMusicClient(private val httpClient: HttpClient) {
 
             val response: String = httpClient.post("https://music.youtube.com/youtubei/v1/player?key=$INNERTUBE_KEY") {
                 contentType(ContentType.Application.Json)
-                header("User-Agent", "com.google.android.apps.youtube.music/6.42.52 (Linux; U; Android 14) gzip")
+                header("User-Agent", "com.google.android.apps.youtube.music/7.03.52 (Linux; U; Android 14) gzip")
                 header("Origin", "https://music.youtube.com")
                 header("X-YouTube-Client-Name", "21")
-                header("X-YouTube-Client-Version", "6.42.52")
+                header("X-YouTube-Client-Version", "7.03.52")
                 setBody(requestBody.toString())
             }.bodyAsText()
 
@@ -590,9 +940,9 @@ class YouTubeMusicClient(private val httpClient: HttpClient) {
             }
 
             val userAgent = if (clientName == "IOS") {
-                "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)"
+                "com.google.ios.youtube/$clientVersion (iPhone16,2; U; CPU iOS 18_7_2 like Mac OS X;)"
             } else {
-                "com.google.android.youtube/19.44.38 (Linux; U; Android 14) gzip"
+                "com.google.android.youtube/$clientVersion (Linux; U; Android 14) gzip"
             }
 
             val response: String = httpClient.post("https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8") {
@@ -689,39 +1039,67 @@ class YouTubeMusicClient(private val httpClient: HttpClient) {
         val streamingData = jsonObject["streamingData"]?.jsonObject
             ?: return null
 
-        // PREFER direct audio streams over HLS (HLS segments often get 403 errors)
+        // Get all adaptive formats (audio streams)
         val adaptiveFormats = streamingData["adaptiveFormats"]?.jsonArray
         Log.d(TAG, "adaptiveFormats count: ${adaptiveFormats?.size ?: 0}")
 
-        val audioStreams = adaptiveFormats?.filter { format ->
+        // Filter to audio formats and sort by bitrate
+        val audioFormats = adaptiveFormats?.filter { format ->
             val mimeType = format.jsonObject["mimeType"]?.jsonPrimitive?.contentOrNull ?: ""
-            val hasUrl = format.jsonObject["url"] != null
-            Log.d(TAG, "Format: $mimeType, hasUrl: $hasUrl")
-            mimeType.startsWith("audio/") && hasUrl
+            mimeType.startsWith("audio/")
         }?.sortedByDescending { format ->
             format.jsonObject["bitrate"]?.jsonPrimitive?.intOrNull ?: 0
         }
 
-        Log.d(TAG, "Audio streams with direct URL: ${audioStreams?.size ?: 0}")
+        Log.d(TAG, "Audio formats found: ${audioFormats?.size ?: 0}")
 
-        // First try direct audio URL from adaptive formats
-        val directAudioUrl = audioStreams?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull
-        if (directAudioUrl != null) {
-            Log.d(TAG, "Found direct audio stream URL (preferred): ${directAudioUrl.take(100)}...")
-            return PlayerResult(directAudioUrl, track)
+        // Try to get a decoded stream URL using NewPipe's n-parameter decoder
+        for (format in audioFormats ?: emptyList()) {
+            val formatObj = format.jsonObject
+            val url = formatObj["url"]?.jsonPrimitive?.contentOrNull
+            val signatureCipher = formatObj["signatureCipher"]?.jsonPrimitive?.contentOrNull
+
+            if (url == null && signatureCipher == null) continue
+
+            // If we have NewPipe extractor, use it to decode the n-parameter
+            // This is the key to avoiding 403 errors from YouTube throttling
+            val decodedUrl = newPipeExtractor?.decodeStreamUrl(url, signatureCipher, videoId)
+            if (decodedUrl != null) {
+                Log.d(TAG, "NewPipe decoded URL successfully for $clientName")
+                return PlayerResult(decodedUrl, track)
+            }
+
+            // If NewPipe decoding fails but we have a direct URL, try it anyway
+            if (url != null) {
+                Log.d(TAG, "Using direct URL (may get 403): ${url.take(80)}...")
+                return PlayerResult(url, track)
+            }
         }
 
         // Try regular formats (combined audio+video) as fallback
         val formats = streamingData["formats"]?.jsonArray
-        val combinedStreamUrl = formats?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull
-        if (combinedStreamUrl != null) {
-            Log.d(TAG, "Found combined stream URL (fallback)")
-            return PlayerResult(combinedStreamUrl, track)
+        for (format in formats ?: emptyList()) {
+            val formatObj = format.jsonObject
+            val url = formatObj["url"]?.jsonPrimitive?.contentOrNull
+            val signatureCipher = formatObj["signatureCipher"]?.jsonPrimitive?.contentOrNull
+
+            if (url == null && signatureCipher == null) continue
+
+            val decodedUrl = newPipeExtractor?.decodeStreamUrl(url, signatureCipher, videoId)
+            if (decodedUrl != null) {
+                Log.d(TAG, "NewPipe decoded combined stream URL")
+                return PlayerResult(decodedUrl, track)
+            }
+
+            if (url != null) {
+                Log.d(TAG, "Using combined stream URL (fallback)")
+                return PlayerResult(url, track)
+            }
         }
 
-        // Last resort: HLS manifest (often fails with 403 on segments)
+        // Last resort: HLS manifest (doesn't need n-parameter decryption)
         streamingData["hlsManifestUrl"]?.jsonPrimitive?.contentOrNull?.let {
-            Log.d(TAG, "Found HLS manifest URL (last resort - may fail)")
+            Log.d(TAG, "Found HLS manifest URL (last resort)")
             return PlayerResult(it, track)
         }
 

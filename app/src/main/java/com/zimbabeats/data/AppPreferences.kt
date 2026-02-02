@@ -62,6 +62,12 @@ class AppPreferences(private val context: Context) {
         private val KEY_AUTO_UPDATE_CHECK = booleanPreferencesKey("auto_update_check")
         private val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check")
 
+        // YouTube Authentication Keys
+        private val KEY_YOUTUBE_COOKIE = stringPreferencesKey("youtube_cookie")
+        private val KEY_YOUTUBE_LOGGED_IN = booleanPreferencesKey("youtube_logged_in")
+        private val KEY_YOUTUBE_ACCOUNT_NAME = stringPreferencesKey("youtube_account_name")
+        private val KEY_YOUTUBE_ACCOUNT_EMAIL = stringPreferencesKey("youtube_account_email")
+
         // Quality options
         const val QUALITY_AUTO = "Auto"
         const val QUALITY_HIGH = "High (1080p)"
@@ -200,6 +206,34 @@ class AppPreferences(private val context: Context) {
             preferences[KEY_LAST_UPDATE_CHECK] ?: 0L
         }
         .stateIn(scope, SharingStarted.Eagerly, 0L)
+
+    // YouTube Cookie Flow
+    val youtubeCookieFlow: StateFlow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[KEY_YOUTUBE_COOKIE] ?: ""
+        }
+        .stateIn(scope, SharingStarted.Eagerly, "")
+
+    // YouTube Logged In Flow
+    val youtubeLoggedInFlow: StateFlow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[KEY_YOUTUBE_LOGGED_IN] ?: false
+        }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    // YouTube Account Name Flow
+    val youtubeAccountNameFlow: StateFlow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[KEY_YOUTUBE_ACCOUNT_NAME] ?: ""
+        }
+        .stateIn(scope, SharingStarted.Eagerly, "")
+
+    // YouTube Account Email Flow
+    val youtubeAccountEmailFlow: StateFlow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[KEY_YOUTUBE_ACCOUNT_EMAIL] ?: ""
+        }
+        .stateIn(scope, SharingStarted.Eagerly, "")
 
     init {
         // Listen for system accessibility changes
@@ -342,4 +376,89 @@ class AppPreferences(private val context: Context) {
 
     fun getLastUpdateCheck(): Long = lastUpdateCheckFlow.value
     fun isAutoUpdateCheckEnabled(): Boolean = autoUpdateCheckFlow.value
+
+    // YouTube Authentication setters
+    fun setYouTubeCookie(cookie: String) {
+        scope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_YOUTUBE_COOKIE] = cookie
+            }
+        }
+    }
+
+    fun setYouTubeLoggedIn(loggedIn: Boolean) {
+        scope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_YOUTUBE_LOGGED_IN] = loggedIn
+            }
+        }
+    }
+
+    fun setYouTubeAccountName(name: String) {
+        scope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_YOUTUBE_ACCOUNT_NAME] = name
+            }
+        }
+    }
+
+    fun setYouTubeAccountEmail(email: String) {
+        scope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_YOUTUBE_ACCOUNT_EMAIL] = email
+            }
+        }
+    }
+
+    /**
+     * Save YouTube account info after successful login
+     */
+    fun saveYouTubeAccount(cookie: String, name: String = "", email: String = "") {
+        scope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_YOUTUBE_COOKIE] = cookie
+                preferences[KEY_YOUTUBE_LOGGED_IN] = true
+                preferences[KEY_YOUTUBE_ACCOUNT_NAME] = name
+                preferences[KEY_YOUTUBE_ACCOUNT_EMAIL] = email
+            }
+        }
+    }
+
+    /**
+     * Clear YouTube account data (logout)
+     */
+    fun clearYouTubeAccount() {
+        scope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[KEY_YOUTUBE_COOKIE] = ""
+                preferences[KEY_YOUTUBE_LOGGED_IN] = false
+                preferences[KEY_YOUTUBE_ACCOUNT_NAME] = ""
+                preferences[KEY_YOUTUBE_ACCOUNT_EMAIL] = ""
+            }
+        }
+    }
+
+    /**
+     * Check if user is logged in to YouTube
+     */
+    fun isYouTubeLoggedIn(): Boolean = youtubeLoggedInFlow.value
+
+    /**
+     * Get YouTube cookie for API requests
+     */
+    fun getYouTubeCookie(): String = youtubeCookieFlow.value
+
+    /**
+     * Extract SAPISID from cookie string for authentication header
+     */
+    fun getSapisid(): String? {
+        val cookie = youtubeCookieFlow.value
+        if (cookie.isEmpty()) return null
+
+        return cookie.split(";")
+            .map { it.trim() }
+            .find { it.startsWith("SAPISID=") || it.startsWith("__Secure-3PAPISID=") }
+            ?.split("=")
+            ?.getOrNull(1)
+    }
 }
